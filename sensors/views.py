@@ -26,7 +26,8 @@ SensorReadingViewSet.history():
 
 from datetime import timedelta
 
-from django.db.models import Avg, Count, OuterRef, Subquery
+from django.conf import settings
+from django.db.models import Avg, Count, OuterRef, Q, Subquery
 from django.db.models.functions import TruncDay, TruncHour
 from django.utils import timezone
 
@@ -34,7 +35,11 @@ from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
+from .aqi import compute_aqi, resolve_location
+from .external_aqi import fetch_external_aqi
+from .geocoding import geocode
 from .models import Sensor, SensorReading
 from .permissions import IsAdminOrReadOnly, IsAuthenticatedReadOrCreate
 from .serializers import SensorReadingSerializer, SensorSerializer
@@ -271,3 +276,124 @@ class SensorReadingViewSet(
             for row in data
         ]
         return Response(result)
+
+
+class LocationSearchView(APIView):
+    """
+    GET /api/v1/sensors/search/?location=<query>
+
+    3-step search flow:
+    -------------------
+    1. Internal: case-insensitive partial match on Sensor.location (also
+       checks CITY_ALIASES so "Bangalore" hits sensors stored as "Bengaluru").
+       Returns VAYU's own live sensor data tagged source="vayu_sensor".
+
+    2. Geocode (Nominatim): if no internal match, resolve the query to
+       (lat, lon).  Returns 404 if geocoding fails.
+
+    3. External (WAQI): fetch nearest monitoring station data for the
+       geocoded coordinates.  Results are cached 15 minutes per location.
+       Returns 404 if WAQI has no nearby station.
+
+    Session: stores the searched location in request.session["last_location"]
+    on every successful match (internal or external).
+
+    Authentication: same as all sensor endpoints — IsAuthenticated.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        query = request.query_params.get("location", "").strip()
+        if not query:
+            return Response(
+                {"detail": "?location=<city name> is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # ── Step 1: internal sensor match ─────────────────────────────────────
+        # Build OR filter covering the original query + any city alias
+        search_terms = resolve_location(query)
+        q_filter = Q()
+        for term in search_terms:
+            q_filter |= Q(location__icontains=term)
+
+        matched_sensors = (
+            Sensor.objects
+            .filter(q_filter)
+            .order_by("sensor_code")
+        )
+
+        if matched_sensors.exists():
+            # Fetch latest reading for each matched sensor (reuse subquery pattern)
+            latest_pk_sq = (
+                SensorReading.objects
+                .filter(sensor=OuterRef("pk"))
+                .order_by("-timestamp")
+                .values("pk")[:1]
+            )
+            pks = (
+                matched_sensors
+                .annotate(latest_pk=Subquery(latest_pk_sq))
+                .exclude(latest_pk=None)
+                .values_list("latest_pk", flat=True)
+            )
+            readings_qs = (
+                SensorReading.objects
+                .filter(pk__in=pks)
+                .select_related("sensor")
+                .order_by("sensor__sensor_code")
+            )
+
+            results = []
+            for reading in readings_qs:
+                aqi_data = compute_aqi(reading.pm25, reading.pm10)
+                results.append({
+                    "source": "vayu_sensor",
+                    "sensor_id":   reading.sensor.id,
+                    "sensor_code": reading.sensor.sensor_code,
+                    "location":    reading.sensor.location,
+                    "latitude":    reading.sensor.latitude,
+                    "longitude":   reading.sensor.longitude,
+                    "status":      reading.sensor.status,
+                    "pm25":        reading.pm25,
+                    "pm10":        reading.pm10,
+                    "temperature": reading.temperature,
+                    "humidity":    reading.humidity,
+                    "timestamp":   reading.timestamp.isoformat(),
+                    "aqi":         aqi_data["aqi"],
+                    "aqi_category": aqi_data["category"],
+                    "pm25_sub":    aqi_data["pm25_sub"],
+                    "pm10_sub":    aqi_data["pm10_sub"],
+                })
+
+            request.session["last_location"] = query
+            return Response({"query": query, "results": results})
+
+        # ── Step 2: geocode via Nominatim ─────────────────────────────────────
+        coords = geocode(query)
+        if coords is None:
+            return Response(
+                {"detail": f"Location '{query}' could not be found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        lat, lon = coords
+        cache_key = f"vayu_waqi_{query.lower().strip()}"
+
+        # ── Step 3: external AQI via WAQI ─────────────────────────────────────
+        external = fetch_external_aqi(lat, lon, cache_key)
+        if external is None:
+            token = getattr(settings, "WAQI_API_TOKEN", "")
+            if not token:
+                detail = (
+                    f"No VAYU sensor found for '{query}' and no WAQI_API_TOKEN "
+                    f"is configured. Set it in .env to enable public AQI data."
+                )
+            else:
+                detail = f"No air quality data available for '{query}' from any source."
+            return Response({"detail": detail}, status=status.HTTP_404_NOT_FOUND)
+
+        # External result — return wrapped in uniform results list
+        request.session["last_location"] = query
+        return Response({"query": query, "results": [external]})

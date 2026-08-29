@@ -456,3 +456,261 @@ body {
 .text-muted  { color: var(--text-muted); }
 .fw-600      { font-weight: 600; }
 
+/* ── Location Search Bar ─────────────────────────────────────── */
+.search-bar {
+  flex: 1;
+  max-width: 420px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.search-input-wrap {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.search-icon {
+  position: absolute;
+  left: 11px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+}
+.search-icon svg { width: 15px; height: 15px; }
+
+.search-input {
+  width: 100%;
+  padding: 8px 34px 8px 34px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text-primary);
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  outline: none;
+  transition: var(--transition);
+}
+.search-input::placeholder { color: var(--text-muted); }
+.search-input:focus {
+  border-color: rgba(56,178,172,0.4);
+  background: rgba(255,255,255,0.07);
+  box-shadow: 0 0 0 3px rgba(56,178,172,0.1);
+}
+.search-input.loading {
+  border-color: rgba(66,153,225,0.4);
+  animation: input-pulse 1s ease infinite;
+}
+@keyframes input-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(66,153,225,0.1); }
+  50%       { box-shadow: 0 0 0 4px rgba(66,153,225,0.2); }
+}
+
+.search-clear-btn {
+  position: absolute;
+  right: 8px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 3px;
+  display: flex;
+  align-items: center;
+  border-radius: 4px;
+  transition: color 0.15s;
+}
+.search-clear-btn:hover { color: var(--text-primary); }
+.search-clear-btn svg { width: 14px; height: 14px; stroke: currentColor; }
+
+.search-btn {
+  padding: 8px 16px;
+  background: linear-gradient(90deg, var(--teal), var(--blue));
+  border: none;
+  border-radius: 10px;
+  color: #fff;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.2s, transform 0.15s;
+  box-shadow: 0 2px 12px rgba(56,178,172,0.3);
+}
+.search-btn:hover  { opacity: 0.88; transform: translateY(-1px); }
+.search-btn:active { transform: translateY(0); }
+.search-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+/* ── Location Context Banner ─────────────────────────────────── */
+.location-context {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(56,178,172,0.07);
+  border: 1px solid rgba(56,178,172,0.18);
+  border-radius: 12px;
+  padding: 10px 16px;
+  margin-bottom: 16px;
+  gap: 12px;
+  animation: slide-in 0.25s ease;
+}
+@keyframes slide-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.location-context-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+.loc-pin-icon {
+  width: 16px; height: 16px;
+  stroke: var(--teal);
+  flex-shrink: 0;
+}
+.location-context-clear {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: color 0.15s, background 0.15s;
+  white-space: nowrap;
+}
+.location-context-clear:hover {
+  color: var(--text-primary);
+  background: rgba(255,255,255,0.06);
+}
+
+/* ── Source Badges ───────────────────────────────────────────── */
+.source-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  flex-shrink: 0;
+}
+.source-badge-vayu {
+  background: rgba(56,178,172,0.15);
+  border: 1px solid rgba(56,178,172,0.35);
+  color: var(--teal);
+}
+.source-badge-public {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+
+/* ── Location Empty State ────────────────────────────────────── */
+.location-empty-state {
+  text-align: center;
+  padding: 48px 24px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 24px;
+  animation: slide-in 0.25s ease;
+}
+.location-empty-icon {
+  font-size: 40px;
+  margin-bottom: 12px;
+  opacity: 0.6;
+}
+.location-empty-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+.location-empty-msg {
+  font-size: 13px;
+  color: var(--text-secondary);
+  max-width: 380px;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+
+/* ── External AQI Card ───────────────────────────────────────── */
+.external-aqi-card {
+  margin-bottom: 24px;
+  padding: 20px 24px;
+  animation: slide-in 0.25s ease;
+}
+.external-aqi-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.external-aqi-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+.external-aqi-subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.external-aqi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.ext-metric-card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  text-align: center;
+}
+.ext-metric-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.ext-metric-value {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.ext-metric-cat {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--teal);
+}
+.ext-metric-unit {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.external-aqi-footer {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+.external-aqi-note {
+  font-size: 12px;
+  color: var(--text-muted);
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  line-height: 1.5;
+}

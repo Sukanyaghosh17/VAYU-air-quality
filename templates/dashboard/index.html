@@ -12,6 +12,33 @@
       <span class="brand-sub">Air Quality</span>
     </div>
 
+    <!-- ── Location Search Bar ─────────────────────────────── -->
+    <div class="search-bar" id="search-bar">
+      <div class="search-input-wrap">
+        <span class="search-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+        </span>
+        <input
+          type="text"
+          id="location-input"
+          class="search-input"
+          placeholder="Search city or town…"
+          autocomplete="off"
+          spellcheck="false"
+          value="{{ last_location }}"
+        >
+        <button class="search-clear-btn" id="search-clear-btn" title="Clear search" style="display:none">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/>
+               <line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <button class="search-btn" id="search-btn">Search</button>
+    </div>
+
     <div class="navbar-right">
       <div class="refresh-indicator">
         <div class="pulse-dot"></div>
@@ -50,97 +77,162 @@
   <!-- ── Main ────────────────────────────────────────────────── -->
   <main class="main">
 
-    <!-- Stat cards -->
-    <div class="section-header">
-      <div class="section-title">Current Readings</div>
-      <div class="section-badge" id="sensor-badge">Fleet average</div>
+    <!-- Location Context Banner -->
+    <div class="location-context" id="location-context" style="display:none">
+      <div class="location-context-inner">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" class="loc-pin-icon">
+          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+          <circle cx="12" cy="10" r="3"/>
+        </svg>
+        <span id="location-context-text">Showing results for —</span>
+        <span class="source-badge source-badge-vayu" id="source-badge" style="display:none">VAYU Sensor</span>
+      </div>
+      <button class="location-context-clear" id="location-context-clear">× Clear</button>
     </div>
-    <div class="stats-grid">
-      <div class="glass-card stat-card pm25" id="stat-pm25" data-label="PM2.5">
-        <div class="stat-label">PM2.5</div>
-        <div class="skeleton" style="height:36px;width:80px;margin-top:8px"></div>
+
+    <!-- No-match empty state -->
+    <div class="location-empty-state" id="location-empty-state" style="display:none">
+      <div class="location-empty-icon">🔍</div>
+      <div class="location-empty-title" id="location-empty-title">No data found</div>
+      <div class="location-empty-msg" id="location-empty-msg"></div>
+    </div>
+
+    <!-- External AQI card (shown when source = external_waqi) -->
+    <div class="external-aqi-card glass-card" id="external-aqi-card" style="display:none">
+      <div class="external-aqi-header">
+        <div>
+          <div class="external-aqi-title" id="ext-station-name">—</div>
+          <div class="external-aqi-subtitle" id="ext-location-label"></div>
+        </div>
+        <span class="source-badge source-badge-public">Public Data · WAQI</span>
       </div>
-      <div class="glass-card stat-card pm10" id="stat-pm10" data-label="PM10">
-        <div class="stat-label">PM10</div>
-        <div class="skeleton" style="height:36px;width:80px;margin-top:8px"></div>
+      <div class="external-aqi-grid">
+        <div class="ext-metric-card">
+          <div class="ext-metric-label">AQI</div>
+          <div class="ext-metric-value" id="ext-aqi">—</div>
+          <div class="ext-metric-cat" id="ext-category">—</div>
+        </div>
+        <div class="ext-metric-card">
+          <div class="ext-metric-label">PM2.5</div>
+          <div class="ext-metric-value" id="ext-pm25">—</div>
+          <div class="ext-metric-unit">µg/m³</div>
+        </div>
+        <div class="ext-metric-card">
+          <div class="ext-metric-label">PM10</div>
+          <div class="ext-metric-value" id="ext-pm10">—</div>
+          <div class="ext-metric-unit">µg/m³</div>
+        </div>
+        <div class="ext-metric-card">
+          <div class="ext-metric-label">Temperature</div>
+          <div class="ext-metric-value" id="ext-temp">—</div>
+          <div class="ext-metric-unit">°C</div>
+        </div>
       </div>
-      <div class="glass-card stat-card temp" id="stat-temp" data-label="Temperature">
-        <div class="stat-label">Temperature</div>
-        <div class="skeleton" style="height:36px;width:80px;margin-top:8px"></div>
-      </div>
-      <div class="glass-card stat-card hum" id="stat-hum" data-label="Humidity">
-        <div class="stat-label">Humidity</div>
-        <div class="skeleton" style="height:36px;width:80px;margin-top:8px"></div>
+      <div class="external-aqi-footer" id="ext-updated-at"></div>
+      <div class="external-aqi-note">
+        ⓘ This data comes from the nearest public monitoring station. Install a VAYU sensor in this location for real-time tracking.
       </div>
     </div>
 
-    <!-- Trend charts -->
-    <div class="section-header">
-      <div class="section-title">Trends</div>
-    </div>
-    <div class="charts-grid">
-      <!-- PM2.5 chart -->
-      <div class="glass-card chart-card">
-        <div class="chart-header">
-          <span class="chart-title text-pm25">PM2.5 Trend</span>
-          <div class="chart-range-btns" id="pm25-range-btns">
-            <button class="chart-range-btn active" onclick="setRange('pm25','24h',this)" id="pm25-24h">24h</button>
-            <button class="chart-range-btn"         onclick="setRange('pm25','7d',this)"  id="pm25-7d">7d</button>
-            <button class="chart-range-btn"         onclick="setRange('pm25','30d',this)" id="pm25-30d">30d</button>
-          </div>
+    <!-- Stat cards (shown for VAYU sensors or fleet-wide view) -->
+    <div id="vayu-dashboard-section">
+      <div class="section-header">
+        <div class="section-title">Current Readings</div>
+        <div class="section-badge" id="sensor-badge">Fleet average</div>
+      </div>
+      <div class="stats-grid">
+        <div class="glass-card stat-card pm25" id="stat-pm25" data-label="PM2.5">
+          <div class="stat-label">PM2.5</div>
+          <div class="skeleton" style="height:36px;width:80px;margin-top:8px"></div>
         </div>
-        <div class="chart-wrap">
-          <canvas id="pm25-chart"></canvas>
+        <div class="glass-card stat-card pm10" id="stat-pm10" data-label="PM10">
+          <div class="stat-label">PM10</div>
+          <div class="skeleton" style="height:36px;width:80px;margin-top:8px"></div>
+        </div>
+        <div class="glass-card stat-card temp" id="stat-temp" data-label="Temperature">
+          <div class="stat-label">Temperature</div>
+          <div class="skeleton" style="height:36px;width:80px;margin-top:8px"></div>
+        </div>
+        <div class="glass-card stat-card hum" id="stat-hum" data-label="Humidity">
+          <div class="stat-label">Humidity</div>
+          <div class="skeleton" style="height:36px;width:80px;margin-top:8px"></div>
         </div>
       </div>
 
-      <!-- PM10 chart -->
-      <div class="glass-card chart-card">
-        <div class="chart-header">
-          <span class="chart-title text-pm10">PM10 Trend</span>
-          <div class="chart-range-btns" id="pm10-range-btns">
-            <button class="chart-range-btn active" onclick="setRange('pm10','24h',this)" id="pm10-24h">24h</button>
-            <button class="chart-range-btn"         onclick="setRange('pm10','7d',this)"  id="pm10-7d">7d</button>
-            <button class="chart-range-btn"         onclick="setRange('pm10','30d',this)" id="pm10-30d">30d</button>
-          </div>
-        </div>
-        <div class="chart-wrap">
-          <canvas id="pm10-chart"></canvas>
-        </div>
+      <!-- Trend charts -->
+      <div class="section-header">
+        <div class="section-title">Trends</div>
       </div>
-    </div>
-
-    <!-- Alert feed -->
-    <div class="section-header">
-      <div class="section-title">
-        Open Alerts
-        <span class="section-badge" id="alert-count">—</span>
-      </div>
-    </div>
-    <div class="glass-card alert-card">
-      <table class="alert-table">
-        <thead>
-          <tr>
-            <th>Severity</th>
-            <th>Sensor</th>
-            <th>Parameter</th>
-            <th>Value</th>
-            <th>Type</th>
-            <th>Time</th>
-          </tr>
-        </thead>
-        <tbody id="alert-tbody">
-          <tr><td colspan="6">
-            <div class="empty-state">
-              <div class="skeleton" style="height:14px;width:200px;margin:0 auto 8px"></div>
+      <div class="charts-grid">
+        <!-- PM2.5 chart -->
+        <div class="glass-card chart-card">
+          <div class="chart-header">
+            <span class="chart-title text-pm25">PM2.5 Trend</span>
+            <div class="chart-range-btns" id="pm25-range-btns">
+              <button class="chart-range-btn active" onclick="setRange('pm25','24h',this)" id="pm25-24h">24h</button>
+              <button class="chart-range-btn"         onclick="setRange('pm25','7d',this)"  id="pm25-7d">7d</button>
+              <button class="chart-range-btn"         onclick="setRange('pm25','30d',this)" id="pm25-30d">30d</button>
             </div>
-          </td></tr>
-        </tbody>
-      </table>
-    </div>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="pm25-chart"></canvas>
+          </div>
+        </div>
+
+        <!-- PM10 chart -->
+        <div class="glass-card chart-card">
+          <div class="chart-header">
+            <span class="chart-title text-pm10">PM10 Trend</span>
+            <div class="chart-range-btns" id="pm10-range-btns">
+              <button class="chart-range-btn active" onclick="setRange('pm10','24h',this)" id="pm10-24h">24h</button>
+              <button class="chart-range-btn"         onclick="setRange('pm10','7d',this)"  id="pm10-7d">7d</button>
+              <button class="chart-range-btn"         onclick="setRange('pm10','30d',this)" id="pm10-30d">30d</button>
+            </div>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="pm10-chart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Alert feed -->
+      <div class="section-header">
+        <div class="section-title">
+          Open Alerts
+          <span class="section-badge" id="alert-count">—</span>
+        </div>
+      </div>
+      <div class="glass-card alert-card">
+        <table class="alert-table">
+          <thead>
+            <tr>
+              <th>Severity</th>
+              <th>Sensor</th>
+              <th>Parameter</th>
+              <th>Value</th>
+              <th>Type</th>
+              <th>Time</th>
+            </tr>
+          </thead>
+          <tbody id="alert-tbody">
+            <tr><td colspan="6">
+              <div class="empty-state">
+                <div class="skeleton" style="height:14px;width:200px;margin:0 auto 8px"></div>
+              </div>
+            </td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div><!-- end #vayu-dashboard-section -->
 
   </main>
 </div>
+
+<!-- Pass last_location from Django session into JS -->
+<script>
+  window.VAYU_LAST_LOCATION = "{{ last_location|escapejs }}";
+</script>
 {% endblock %}
 
 {% block extra_js %}

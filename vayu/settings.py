@@ -150,3 +150,24 @@ ALERT_COOLDOWN_SECONDS = 300
 LOGIN_URL = "/login/"
 LOGIN_REDIRECT_URL = "/"
 LOGOUT_REDIRECT_URL = "/login/"
+
+# ── External AQI integration ──────────────────────────────────────────────────
+# World Air Quality Index (WAQI) API token.
+# Get a free token at: https://aqicn.org/data-platform/token/
+# Set to empty string to disable external lookups (endpoint will still work
+# for internal VAYU sensors; external fallback will return a clear error).
+WAQI_API_TOKEN = env("WAQI_API_TOKEN", default="")
+
+# ── Cache (location search results cached 15 min) ─────────────────────────────
+# Uses in-process LocMemCache in dev — no external Redis/memcached needed.
+# In production swap CACHE_BACKEND to 'django.core.cache.backends.redis.RedisCache'
+# and set CACHE_LOCATION to your Redis URL.
+CACHES = {
+    "default": {
+        "BACKEND": env(
+            "CACHE_BACKEND",
+            default="django.core.cache.backends.locmem.LocMemCache",
+        ),
+        "LOCATION": env("CACHE_LOCATION", default="vayu-default"),
+    }
+}

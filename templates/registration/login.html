@@ -1,71 +1,619 @@
-{% extends "base.html" %}
-{% block title %}VAYU — Sign In{% endblock %}
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="VAYU — Sign in to your Air Quality Monitoring account">
+  <title>VAYU — Sign In</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+  <style>
+    /* ── Auth Layout ── */
+    .auth-page {
+      min-height: 100vh;
+      background: #070b14;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      font-family: 'Inter', sans-serif;
+    }
 
-{% block body %}
-<div class="login-page">
-  <div class="login-card">
+    .auth-container {
+      display: flex;
+      width: 100%;
+      max-width: 860px;
+      min-height: 580px;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 32px 80px rgba(0,0,0,0.6);
+      border: 1px solid rgba(255,255,255,0.07);
+    }
 
-    <div class="login-logo">VAYU</div>
-    <div class="login-sub">Air Quality Monitoring Platform</div>
+    /* ── Left Panel ── */
+    .auth-left {
+      width: 42%;
+      position: relative;
+      background: linear-gradient(160deg, #0a1628 0%, #0c2240 40%, #071a2e 100%);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 32px 28px;
+      overflow: hidden;
+    }
 
-    {% if form.errors %}
-    <div class="login-error">
-      ⚠ Invalid username or password. Please try again.
-    </div>
-    {% endif %}
+    .auth-left::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at 50% 80%, rgba(32, 178, 140, 0.18) 0%, transparent 65%),
+                  radial-gradient(ellipse at 80% 20%, rgba(56, 140, 200, 0.1) 0%, transparent 50%);
+      pointer-events: none;
+    }
 
-    <form method="post" action="{% url 'login' %}" id="login-form">
-      {% csrf_token %}
-      <input type="hidden" name="next" value="{{ next }}">
+    .auth-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      position: relative;
+      z-index: 1;
+    }
 
-      <div class="form-group">
-        <label class="form-label" for="id_username">Username</label>
-        <input class="form-input" type="text" name="username" id="id_username"
-               autocomplete="username" autofocus required
-               placeholder="Enter your username">
-      </div>
+    .auth-brand-icon {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, #20c997, #4299e1);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
 
-      <div class="form-group">
-        <label class="form-label" for="id_password">Password</label>
-        <div class="password-input-wrapper">
-          <input class="form-input" type="password" name="password" id="id_password"
-                 autocomplete="current-password" required
-                 placeholder="Enter your password">
-          <button type="button" class="toggle-password-btn" aria-label="Toggle password visibility" onclick="togglePasswordVisibility('id_password', this)">
-            <svg class="eye-icon" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-            <svg class="eye-off-icon" style="display:none;" viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
-          </button>
+    .auth-brand-icon svg {
+      width: 20px;
+      height: 20px;
+      stroke: white;
+      fill: none;
+      stroke-width: 2.2;
+      stroke-linecap: round;
+    }
+
+    .auth-brand-name {
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      background: linear-gradient(135deg, #38e8c0, #63b3ed);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .auth-brand-sub {
+      font-size: 11px;
+      color: rgba(255,255,255,0.45);
+      letter-spacing: 0.3px;
+      margin-top: 4px;
+      font-weight: 400;
+    }
+
+    .auth-hero {
+      position: relative;
+      z-index: 1;
+      margin-top: 20px;
+    }
+
+    .auth-hero h2 {
+      font-size: 26px;
+      font-weight: 800;
+      color: #fff;
+      line-height: 1.2;
+      margin-bottom: 12px;
+    }
+
+    .auth-hero p {
+      font-size: 13px;
+      color: rgba(255,255,255,0.45);
+      line-height: 1.6;
+      max-width: 200px;
+    }
+
+    /* Cityscape SVG illustration */
+    .cityscape-wrapper {
+      position: absolute;
+      bottom: 80px;
+      left: 0;
+      right: 0;
+      height: 200px;
+      z-index: 0;
+    }
+
+    .auth-info-card {
+      position: relative;
+      z-index: 2;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 14px;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 8px;
+    }
+
+    .auth-info-card-icon {
+      width: 38px;
+      height: 38px;
+      min-width: 38px;
+      background: linear-gradient(135deg, rgba(32,201,151,0.25), rgba(66,153,225,0.2));
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .auth-info-card-icon svg {
+      width: 18px;
+      height: 18px;
+      stroke: #38e8c0;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+    }
+
+    .auth-info-card-text h4 {
+      font-size: 13px;
+      font-weight: 600;
+      color: #e8edf5;
+      margin-bottom: 2px;
+    }
+
+    .auth-info-card-text p {
+      font-size: 11px;
+      color: rgba(255,255,255,0.4);
+      line-height: 1.4;
+      max-width: 100%;
+    }
+
+    .auth-copyright {
+      position: relative;
+      z-index: 2;
+      font-size: 11px;
+      color: rgba(255,255,255,0.25);
+      text-align: center;
+      margin-top: 16px;
+    }
+
+    /* ── Right Panel ── */
+    .auth-right {
+      width: 58%;
+      background: #0e1625;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 44px 40px;
+    }
+
+    .auth-form-title {
+      font-size: 24px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 6px;
+    }
+
+    .auth-form-subtitle {
+      font-size: 13px;
+      color: rgba(255,255,255,0.45);
+      margin-bottom: 28px;
+    }
+
+    .auth-form .form-group {
+      margin-bottom: 16px;
+    }
+
+    .auth-form .form-label {
+      display: block;
+      font-size: 12.5px;
+      font-weight: 500;
+      color: #c8d3e0;
+      margin-bottom: 7px;
+    }
+
+    .auth-input-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .auth-input-wrap .input-icon {
+      position: absolute;
+      left: 13px;
+      color: rgba(255,255,255,0.3);
+      display: flex;
+      align-items: center;
+    }
+
+    .auth-input-wrap .input-icon svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .auth-input-wrap .form-input {
+      width: 100%;
+      padding: 11px 42px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 10px;
+      color: #e8edf5;
+      font-family: 'Inter', sans-serif;
+      font-size: 13.5px;
+      outline: none;
+      transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+    }
+
+    .auth-input-wrap .form-input::placeholder {
+      color: rgba(255,255,255,0.22);
+    }
+
+    .auth-input-wrap .form-input:focus {
+      border-color: rgba(32,201,151,0.45);
+      background: rgba(255,255,255,0.07);
+      box-shadow: 0 0 0 3px rgba(32,201,151,0.1);
+    }
+
+    .auth-input-wrap .toggle-password-btn {
+      position: absolute;
+      right: 10px;
+      background: transparent;
+      border: none;
+      color: rgba(255,255,255,0.3);
+      cursor: pointer;
+      padding: 4px;
+      display: flex;
+      align-items: center;
+      border-radius: 6px;
+      transition: color 0.2s;
+    }
+
+    .auth-input-wrap .toggle-password-btn:hover { color: rgba(255,255,255,0.65); }
+
+    .auth-input-wrap .toggle-password-btn svg {
+      width: 16px; height: 16px;
+      stroke: currentColor; fill: none;
+      stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+    }
+
+    .auth-form-extras {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 22px;
+    }
+
+    .auth-checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12.5px;
+      color: rgba(255,255,255,0.45);
+      cursor: pointer;
+    }
+
+    .auth-checkbox-label input[type="checkbox"] {
+      width: 14px;
+      height: 14px;
+      accent-color: #20c997;
+      cursor: pointer;
+    }
+
+    .auth-forgot-link {
+      font-size: 12.5px;
+      color: #38d9c0;
+      text-decoration: none;
+      font-weight: 500;
+      transition: opacity 0.2s;
+    }
+
+    .auth-forgot-link:hover { opacity: 0.75; }
+
+    .auth-error {
+      background: rgba(252,129,129,0.08);
+      border: 1px solid rgba(252,129,129,0.2);
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 12.5px;
+      color: #fc8181;
+      margin-bottom: 18px;
+    }
+
+    .btn-auth-submit {
+      width: 100%;
+      padding: 13px;
+      background: linear-gradient(90deg, #20c997, #4299e1);
+      border: none;
+      border-radius: 10px;
+      color: #fff;
+      font-family: 'Inter', sans-serif;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
+      box-shadow: 0 4px 20px rgba(32,201,151,0.35);
+      letter-spacing: 0.2px;
+    }
+
+    .btn-auth-submit:hover {
+      opacity: 0.92;
+      transform: translateY(-1px);
+      box-shadow: 0 8px 28px rgba(32,201,151,0.45);
+    }
+
+    .btn-auth-submit:active { transform: translateY(0); }
+
+    .auth-divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 20px 0;
+      color: rgba(255,255,255,0.25);
+      font-size: 12px;
+    }
+
+    .auth-divider::before,
+    .auth-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: rgba(255,255,255,0.08);
+    }
+
+    .auth-social-btns {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 22px;
+    }
+
+    .btn-social {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 12px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 10px;
+      color: rgba(255,255,255,0.7);
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.2s, border-color 0.2s;
+    }
+
+    .btn-social:hover {
+      background: rgba(255,255,255,0.08);
+      border-color: rgba(255,255,255,0.15);
+    }
+
+    .btn-social svg {
+      width: 18px; height: 18px;
+    }
+
+    .auth-switch {
+      text-align: center;
+      font-size: 13px;
+      color: rgba(255,255,255,0.38);
+    }
+
+    .auth-switch a {
+      color: #38d9c0;
+      text-decoration: none;
+      font-weight: 600;
+      margin-left: 4px;
+      transition: opacity 0.2s;
+    }
+
+    .auth-switch a:hover { opacity: 0.75; }
+  </style>
+</head>
+<body>
+<div class="auth-page">
+  <div class="auth-container">
+
+    <!-- ── Left Panel ── -->
+    <div class="auth-left">
+      <div>
+        <div class="auth-brand">
+          <div class="auth-brand-icon">
+            <svg viewBox="0 0 24 24"><path d="M3 8c0-1.1.9-2 2-2h10a4 4 0 0 1 0 8H3"/><path d="M7 16c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2h12a3 3 0 0 1 0 6H6"/></svg>
+          </div>
+          <div>
+            <div class="auth-brand-name">VAYU</div>
+            <div class="auth-brand-sub">Air Quality Monitoring Platform</div>
+          </div>
+        </div>
+
+        <div class="auth-hero">
+          <h2>Breathe better.<br>Live better.</h2>
+          <p>Monitor real-time air quality, get alerts, and take action for a healthier tomorrow.</p>
         </div>
       </div>
 
-      <button class="btn-submit" type="submit" id="login-btn">Sign In →</button>
-    </form>
+      <!-- Cityscape SVG -->
+      <div class="cityscape-wrapper" aria-hidden="true">
+        <svg viewBox="0 0 300 200" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMax meet" style="width:100%;height:100%;">
+          <defs>
+            <linearGradient id="skyGlow" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#0c2a40" stop-opacity="0"/>
+              <stop offset="100%" stop-color="#071a2e" stop-opacity="1"/>
+            </linearGradient>
+            <radialGradient id="glowGreen" cx="50%" cy="100%" r="60%">
+              <stop offset="0%" stop-color="#20c997" stop-opacity="0.25"/>
+              <stop offset="100%" stop-color="#20c997" stop-opacity="0"/>
+            </radialGradient>
+            <filter id="blur4"><feGaussianBlur stdDeviation="4"/></filter>
+          </defs>
+          <!-- Glow -->
+          <ellipse cx="150" cy="190" rx="140" ry="50" fill="url(#glowGreen)"/>
+          <!-- Mountains -->
+          <polygon points="0,160 60,80 120,160" fill="#0a1e35" opacity="0.7"/>
+          <polygon points="80,160 140,70 200,160" fill="#0c2240" opacity="0.8"/>
+          <polygon points="160,160 220,90 280,160" fill="#091828" opacity="0.7"/>
+          <!-- Buildings -->
+          <rect x="10" y="110" width="22" height="60" fill="#0e2a42" rx="2"/>
+          <rect x="14" y="106" width="14" height="6" fill="#112e48" rx="1"/>
+          <rect x="40" y="90" width="18" height="80" fill="#0d2840" rx="2"/>
+          <rect x="63" y="105" width="20" height="65" fill="#0e2a42" rx="2"/>
+          <rect x="88" y="80" width="16" height="90" fill="#0c2640" rx="2"/>
+          <rect x="90" y="76" width="12" height="6" fill="#0f2e4a" rx="1"/>
+          <rect x="110" y="95" width="24" height="75" fill="#0d2840" rx="2"/>
+          <rect x="138" y="100" width="18" height="70" fill="#0e2a42" rx="2"/>
+          <rect x="162" y="88" width="20" height="82" fill="#0c2640" rx="2"/>
+          <rect x="162" y="84" width="20" height="6" fill="#0f2e4a" rx="1"/>
+          <rect x="188" y="105" width="16" height="65" fill="#0e2a42" rx="2"/>
+          <rect x="210" y="92" width="22" height="78" fill="#0c2640" rx="2"/>
+          <rect x="238" y="110" width="18" height="60" fill="#0d2840" rx="2"/>
+          <rect x="260" y="98" width="20" height="72" fill="#0e2a42" rx="2"/>
+          <!-- Window lights -->
+          <rect x="14" y="118" width="4" height="3" fill="#38d9c0" opacity="0.5" rx="0.5"/>
+          <rect x="20" y="118" width="4" height="3" fill="#38d9c0" opacity="0.3" rx="0.5"/>
+          <rect x="44" y="100" width="4" height="3" fill="#38d9c0" opacity="0.4" rx="0.5"/>
+          <rect x="44" y="108" width="4" height="3" fill="#4299e1" opacity="0.35" rx="0.5"/>
+          <rect x="92" y="90" width="4" height="3" fill="#38d9c0" opacity="0.55" rx="0.5"/>
+          <rect x="92" y="100" width="4" height="3" fill="#4299e1" opacity="0.35" rx="0.5"/>
+          <rect x="115" y="100" width="4" height="3" fill="#38d9c0" opacity="0.4" rx="0.5"/>
+          <rect x="123" y="107" width="4" height="3" fill="#4299e1" opacity="0.35" rx="0.5"/>
+          <rect x="165" y="96" width="4" height="3" fill="#38d9c0" opacity="0.5" rx="0.5"/>
+          <rect x="173" y="96" width="4" height="3" fill="#4299e1" opacity="0.35" rx="0.5"/>
+          <rect x="215" y="100" width="4" height="3" fill="#38d9c0" opacity="0.45" rx="0.5"/>
+          <rect x="264" y="108" width="4" height="3" fill="#38d9c0" opacity="0.4" rx="0.5"/>
+          <!-- Stars -->
+          <circle cx="30" cy="30" r="1" fill="white" opacity="0.5"/>
+          <circle cx="80" cy="20" r="0.8" fill="white" opacity="0.4"/>
+          <circle cx="150" cy="15" r="1" fill="white" opacity="0.5"/>
+          <circle cx="210" cy="25" r="0.8" fill="white" opacity="0.4"/>
+          <circle cx="260" cy="18" r="1" fill="white" opacity="0.45"/>
+          <circle cx="50" cy="50" r="0.6" fill="white" opacity="0.3"/>
+          <circle cx="120" cy="35" r="0.7" fill="white" opacity="0.35"/>
+          <circle cx="190" cy="12" r="0.8" fill="white" opacity="0.4"/>
+          <!-- Ground glow -->
+          <rect x="0" y="168" width="300" height="32" fill="url(#skyGlow)" opacity="0.8"/>
+        </svg>
+      </div>
 
-    <div class="auth-footer" style="margin-top: 24px; text-align: center; font-size: 13px; color: var(--text-secondary);">
-      Don't have an account? 
-      <a href="{% url 'signup' %}" style="color: var(--blue-light); text-decoration: none; font-weight: 600; margin-left: 4px;">Sign Up</a>
+      <div>
+        <div class="auth-info-card">
+          <div class="auth-info-card-icon">
+            <svg viewBox="0 0 24 24"><path d="M12 22a9 9 0 1 1 0-18 9 9 0 0 1 0 18z"/><path d="M8 12l3 3 5-5"/></svg>
+          </div>
+          <div class="auth-info-card-text">
+            <h4>Clean Air, Clear Mind</h4>
+            <p>Together for a greener tomorrow.</p>
+          </div>
+        </div>
+        <p class="auth-copyright">© 2025 VAYU. All rights reserved.</p>
+      </div>
+    </div>
+
+    <!-- ── Right Panel ── -->
+    <div class="auth-right">
+      <h1 class="auth-form-title">Welcome Back!</h1>
+      <p class="auth-form-subtitle">Sign in to continue to your account</p>
+
+      {% if form.errors %}
+      <div class="auth-error">⚠ Invalid username or password. Please try again.</div>
+      {% endif %}
+
+      <form method="post" action="{% url 'login' %}" id="login-form" class="auth-form">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ next }}">
+
+        <div class="form-group">
+          <label class="form-label" for="id_username">Username</label>
+          <div class="auth-input-wrap">
+            <span class="input-icon">
+              <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            </span>
+            <input class="form-input" type="text" name="username" id="id_username"
+                   autocomplete="username" autofocus required
+                   placeholder="Enter your username">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="id_password">Password</label>
+          <div class="auth-input-wrap">
+            <span class="input-icon">
+              <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            </span>
+            <input class="form-input" type="password" name="password" id="id_password"
+                   autocomplete="current-password" required
+                   placeholder="Enter your password">
+            <button type="button" class="toggle-password-btn" aria-label="Toggle password" onclick="togglePw('id_password', this)">
+              <svg class="eye-icon" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              <svg class="eye-off-icon" style="display:none" viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="auth-form-extras">
+          <label class="auth-checkbox-label">
+            <input type="checkbox" name="remember_me"> Remember me
+          </label>
+          <a href="#" class="auth-forgot-link">Forgot password?</a>
+        </div>
+
+        <button class="btn-auth-submit" type="submit" id="login-btn">Sign In →</button>
+      </form>
+
+      <div class="auth-divider">or continue with</div>
+
+      <div class="auth-social-btns">
+        <a href="#" class="btn-social" id="google-login-btn">
+          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+          </svg>
+          Google
+        </a>
+        <a href="#" class="btn-social" id="github-login-btn">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+          GitHub
+        </a>
+      </div>
+
+      <p class="auth-switch">Don't have an account?<a href="{% url 'signup' %}">Sign Up</a></p>
     </div>
 
   </div>
 </div>
 
 <script>
-function togglePasswordVisibility(inputId, btn) {
-  const input = document.getElementById(inputId);
-  if (!input) return;
-  const eyeIcon = btn.querySelector('.eye-icon');
-  const eyeOffIcon = btn.querySelector('.eye-off-icon');
-  if (input.type === 'password') {
-    input.type = 'text';
-    if (eyeIcon) eyeIcon.style.display = 'none';
-    if (eyeOffIcon) eyeOffIcon.style.display = 'block';
+function togglePw(id, btn) {
+  const inp = document.getElementById(id);
+  const eyeOn = btn.querySelector('.eye-icon');
+  const eyeOff = btn.querySelector('.eye-off-icon');
+  if (inp.type === 'password') {
+    inp.type = 'text';
+    eyeOn.style.display = 'none';
+    eyeOff.style.display = 'block';
   } else {
-    input.type = 'password';
-    if (eyeIcon) eyeIcon.style.display = 'block';
-    if (eyeOffIcon) eyeOffIcon.style.display = 'none';
+    inp.type = 'password';
+    eyeOn.style.display = 'block';
+    eyeOff.style.display = 'none';
   }
 }
 </script>
-{% endblock %}
-
-
+</body>
+</html>

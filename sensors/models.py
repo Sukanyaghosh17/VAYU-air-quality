@@ -45,6 +45,20 @@ class Sensor(models.Model):
     location = models.CharField(max_length=200, help_text="Physical location description.")
     status = models.CharField(max_length=15, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
     installed_at = models.DateField(help_text="Date the sensor was physically deployed.")
+    # Optional geocoordinates — null means "not yet geocoded".
+    # Stored as plain floats rather than a spatial type to avoid requiring
+    # PostGIS/SpatiaLite and to keep the project DB-agnostic at this stage.
+    latitude = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Decimal latitude of the sensor installation point.",
+    )
+    longitude = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Decimal longitude of the sensor installation point.",
+    )
+
 
     class Meta:
         ordering = ["sensor_code"]

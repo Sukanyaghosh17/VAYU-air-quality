@@ -34,11 +34,14 @@ class SensorSerializer(serializers.ModelSerializer):
             "id",
             "sensor_code",
             "location",
+            "latitude",
+            "longitude",
             "status",
             "installed_at",
             "reading_count",
         ]
         read_only_fields = ["id"]
+
 
 
 class SensorReadingSerializer(serializers.ModelSerializer):

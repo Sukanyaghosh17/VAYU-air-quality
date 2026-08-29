@@ -19,6 +19,13 @@ class HomeView(LoginRequiredMixin, TemplateView):
     template_name = "dashboard/index.html"
     login_url = "/login/"
 
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        # Restore last-searched location from session so JS can pre-populate
+        # the search bar and immediately re-run the search on page load.
+        ctx["last_location"] = self.request.session.get("last_location", "")
+        return ctx
+
 
 class CustomLoginView(LoginView):
     """Login page with VAYU branding."""
