@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}VAYU — Create Account{% endblock %}
+
+{% block body %}
+<div class="login-page">
+  <div class="login-card" style="max-width: 440px;">
+
+    <div class="login-logo">VAYU</div>
+    <div class="login-sub">Create your account to access the platform</div>
+
+    {% if form.errors %}
+    <div class="login-error">
+      {% for field, errors in form.errors.items %}
+        {% for error in errors %}
+          <div>⚠ {{ error }}</div>
+        {% endfor %}
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <form method="post" action="{% url 'signup' %}" id="signup-form">
+      {% csrf_token %}
+
+      <div class="form-group">
+        <label class="form-label" for="{{ form.username.id_for_label }}">Username</label>
+        {{ form.username }}
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="{{ form.email.id_for_label }}">Email Address</label>
+        {{ form.email }}
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="{{ form.password1.id_for_label }}">Password</label>
+        {{ form.password1 }}
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="{{ form.password2.id_for_label }}">Confirm Password</label>
+        {{ form.password2 }}
+      </div>
+
+      <button class="btn-submit" type="submit" id="signup-btn">Create Account →</button>
+    </form>
+
+    <div class="auth-footer" style="margin-top: 24px; text-align: center; font-size: 13px; color: var(--text-secondary);">
+      Already have an account? 
+      <a href="{% url 'login' %}" style="color: var(--blue-light); text-decoration: none; font-weight: 600; margin-left: 4px;">Sign In</a>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

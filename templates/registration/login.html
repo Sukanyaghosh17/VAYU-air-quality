@@ -35,6 +35,12 @@
       <button class="btn-submit" type="submit" id="login-btn">Sign In →</button>
     </form>
 
+    <div class="auth-footer" style="margin-top: 24px; text-align: center; font-size: 13px; color: var(--text-secondary);">
+      Don't have an account? 
+      <a href="{% url 'signup' %}" style="color: var(--blue-light); text-decoration: none; font-weight: 600; margin-left: 4px;">Sign Up</a>
+    </div>
+
   </div>
 </div>
 {% endblock %}
+
