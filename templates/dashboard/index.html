@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}VAYU — Air Quality Dashboard{% endblock %}
+
+{% block body %}
+<div class="layout">
+
+  <!-- ── Navbar ──────────────────────────────────────────────── -->
+  <nav class="navbar">
+    <div class="navbar-brand">
+      <span class="brand-logo">VAYU</span>
+      <span class="brand-sub">Air Quality</span>
+    </div>
+
+    <div class="navbar-right">
+      <div class="refresh-indicator">
+        <div class="pulse-dot"></div>
+        Live · updated <span id="last-updated">—</span>
+      </div>
+
+      <div class="user-chip">
+        <div class="user-avatar">{{ request.user.username|first|upper }}</div>
+        <span class="user-name">{{ request.user.username }}</span>
+      </div>
+
+      <div class="btn-logout">
+        <form method="post" action="{% url 'logout' %}">
+          {% csrf_token %}
+          <button type="submit" id="logout-btn">⎋ Logout</button>
+        </form>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ── Sidebar ─────────────────────────────────────────────── -->
+  <aside class="sidebar">
+    <div class="sidebar-section-label">Sensor Stations</div>
+    <div id="sensor-list">
+      <!-- populated by dashboard.js -->
+      <div class="sensor-item">
+        <div class="skeleton" style="width:8px;height:8px;border-radius:50%"></div>
+        <div class="sensor-info">
+          <div class="skeleton" style="height:12px;width:80px;margin-bottom:4px"></div>
+          <div class="skeleton" style="height:10px;width:60px"></div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Main ────────────────────────────────────────────────── -->
+  <main class="main">
+
+    <!-- Stat cards -->
+    <div class="section-header">
+      <div class="section-title">Current Readings</div>
+      <div class="section-badge" id="sensor-badge">Fleet average</div>
+    </div>
+    <div class="stats-grid">
+      <div class="glass-card stat-card pm25" id="stat-pm25" data-label="PM2.5">
+        <div class="stat-label">PM2.5</div>
+        <div class="skeleton" style="height:36px;width:80px;margin-top:8px"></div>
+      </div>
+      <div class="glass-card stat-card pm10" id="stat-pm10" data-label="PM10">
+        <div class="stat-label">PM10</div>
+        <div class="skeleton" style="height:36px;width:80px;margin-top:8px"></div>
+      </div>
+      <div class="glass-card stat-card temp" id="stat-temp" data-label="Temperature">
+        <div class="stat-label">Temperature</div>
+        <div class="skeleton" style="height:36px;width:80px;margin-top:8px"></div>
+      </div>
+      <div class="glass-card stat-card hum" id="stat-hum" data-label="Humidity">
+        <div class="stat-label">Humidity</div>
+        <div class="skeleton" style="height:36px;width:80px;margin-top:8px"></div>
+      </div>
+    </div>
+
+    <!-- Trend charts -->
+    <div class="section-header">
+      <div class="section-title">Trends</div>
+    </div>
+    <div class="charts-grid">
+      <!-- PM2.5 chart -->
+      <div class="glass-card chart-card">
+        <div class="chart-header">
+          <span class="chart-title text-pm25">PM2.5 Trend</span>
+          <div class="chart-range-btns" id="pm25-range-btns">
+            <button class="chart-range-btn active" onclick="setRange('pm25','24h',this)" id="pm25-24h">24h</button>
+            <button class="chart-range-btn"         onclick="setRange('pm25','7d',this)"  id="pm25-7d">7d</button>
+            <button class="chart-range-btn"         onclick="setRange('pm25','30d',this)" id="pm25-30d">30d</button>
+          </div>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="pm25-chart"></canvas>
+        </div>
+      </div>
+
+      <!-- PM10 chart -->
+      <div class="glass-card chart-card">
+        <div class="chart-header">
+          <span class="chart-title text-pm10">PM10 Trend</span>
+          <div class="chart-range-btns" id="pm10-range-btns">
+            <button class="chart-range-btn active" onclick="setRange('pm10','24h',this)" id="pm10-24h">24h</button>
+            <button class="chart-range-btn"         onclick="setRange('pm10','7d',this)"  id="pm10-7d">7d</button>
+            <button class="chart-range-btn"         onclick="setRange('pm10','30d',this)" id="pm10-30d">30d</button>
+          </div>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="pm10-chart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Alert feed -->
+    <div class="section-header">
+      <div class="section-title">
+        Open Alerts
+        <span class="section-badge" id="alert-count">—</span>
+      </div>
+    </div>
+    <div class="glass-card alert-card">
+      <table class="alert-table">
+        <thead>
+          <tr>
+            <th>Severity</th>
+            <th>Sensor</th>
+            <th>Parameter</th>
+            <th>Value</th>
+            <th>Type</th>
+            <th>Time</th>
+          </tr>
+        </thead>
+        <tbody id="alert-tbody">
+          <tr><td colspan="6">
+            <div class="empty-state">
+              <div class="skeleton" style="height:14px;width:200px;margin:0 auto 8px"></div>
+            </div>
+          </td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </main>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="{% static 'js/dashboard.js' %}"></script>
+{% endblock %}

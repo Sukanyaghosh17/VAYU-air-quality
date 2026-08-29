@@ -1,0 +1,19 @@
+# Django + core
+Django==6.1
+djangorestframework==3.18.0
+django-environ==0.14.0
+
+# Database
+mysqlclient==2.2.8
+
+# Data processing & ML
+pandas>=2.2
+numpy>=2.0
+scikit-learn>=1.8
+joblib>=1.5
+
+# Simulator HTTP client
+requests>=2.32
+
+# WSGI server (production)
+gunicorn>=22.0
