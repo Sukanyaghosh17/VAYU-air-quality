@@ -1,0 +1,1042 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="VAYU — Air Quality Monitoring Platform">
+  <title>VAYU — {% if auth_mode == 'signup' %}Create Account{% else %}Sign In{% endif %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    /* ══════════════════════════════════════════════
+       Design tokens
+    ══════════════════════════════════════════════ */
+    :root {
+      --bg:         #070c12;
+      --brand-bg:   linear-gradient(158deg, #09131d 0%, #06181f 42%, #051018 100%);
+      --form-bg:    #0b111a;
+      --accent:     #2ce6c8;
+      --accent-dim: rgba(44,230,200,.16);
+      --text:       #f3f7fb;
+      --text-muted: #8395a7;
+      --text-dim:   #4d5b6d;
+      --border-in:  rgba(255,255,255,.10);
+      /* Half-flip: each panel swings OUT to 90° (edge-on), content
+         is swapped at the midpoint by JS, then swings BACK from -90° → 0°.
+         Total perceived duration = 2 × --half-dur */
+      --half-dur:   325ms;
+      --flip-ease:  cubic-bezier(.65,0,.35,1);
+    }
+    @media (prefers-reduced-motion: reduce) { :root { --half-dur: 1ms; } }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      min-height: 100vh;
+      background: var(--bg);
+      background-image:
+        radial-gradient(circle at 18% 28%, rgba(20,184,166,.09) 0%, transparent 48%),
+        radial-gradient(circle at 82% 78%, rgba(44,230,200,.06) 0%, transparent 40%);
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px 16px;
+      font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+      color: var(--text);
+      overflow-x: hidden;
+    }
+
+    .bg-orb {
+      position: fixed; pointer-events: none; z-index: 0;
+      width: 500px; height: 500px; top: -80px; left: 8%;
+      background: radial-gradient(circle, rgba(44,230,200,.10) 0%, transparent 70%);
+      filter: blur(70px);
+      animation: orb 20s ease-in-out infinite alternate;
+    }
+    @keyframes orb {
+      0%   { transform: translate(0,0) scale(1); }
+      50%  { transform: translate(55px,35px) scale(1.07); }
+      100% { transform: translate(-25px,70px) scale(.94); }
+    }
+
+    .sr-only {
+      position: absolute; width: 1px; height: 1px;
+      overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap;
+    }
+
+    /* ══════════════════════════════════════════════
+       AUTH CARD
+       perspective on the card → affects .half children
+    ══════════════════════════════════════════════ */
+    .auth-card {
+      position: relative; z-index: 1;
+      width: 100%; max-width: 900px; height: 660px;
+      perspective: 2400px;
+      perspective-origin: 50% 50%;
+      animation: appear .55s cubic-bezier(.16,1,.3,1) both;
+    }
+    @keyframes appear {
+      from { opacity: 0; transform: translateY(16px) scale(.98); }
+      to   { opacity: 1; transform: none; }
+    }
+
+    /* Card border / shadow overlay (no overflow:hidden needed) */
+    .auth-card::before {
+      content: '';
+      position: absolute; inset: 0;
+      border-radius: 22px;
+      border: 1px solid rgba(255,255,255,.08);
+      box-shadow: 0 24px 60px -12px rgba(0,0,0,.72),
+                  0  0 40px -10px rgba(44,230,200,.07);
+      pointer-events: none;
+      z-index: 60;
+    }
+
+    /* ══════════════════════════════════════════════
+       SEAM — fixed vertical partition (never moves)
+    ══════════════════════════════════════════════ */
+    .seam {
+      position: absolute;
+      left: calc(50% - 1px); top: 0; bottom: 0; width: 2px;
+      background: linear-gradient(to bottom,
+        transparent 0%,
+        rgba(44,230,200,.20) 12%,
+        rgba(44,230,200,.32) 50%,
+        rgba(44,230,200,.20) 88%,
+        transparent 100%);
+      z-index: 50;
+      pointer-events: none;
+    }
+
+    /* ══════════════════════════════════════════════
+       HALF — permanent left / right panel containers
+       Left half: always left (brand content inside)
+       Right half: always right (form content inside)
+       Transform-origin puts the hinge at the SEAM so
+       the rotation reads as a cabinet-door opening:
+         Left half:  hinge at right edge  →  transform-origin: right center
+         Right half: hinge at left  edge  →  transform-origin: left  center
+    ══════════════════════════════════════════════ */
+    .half {
+      position: absolute;
+      top: 0; bottom: 0; width: 50%;
+      /* preserve-3d so the rotation has actual depth */
+      transform-style: preserve-3d;
+      will-change: transform;
+    }
+    .half-left  { left: 0;   transform-origin: right center; }
+    .half-right { left: 50%; transform-origin: left  center; }
+
+    /* ── Two-phase flip keyframes ──
+       Phase 1 (flipOut): panel rotates from 0° → 90° (edge-on, invisible)
+       Phase 2 (flipIn ): panel rotates from -90° → 0° (swings back into view)
+       JS swaps content at the 90° midpoint between the two phases.
+    ── */
+    @keyframes flipOut-left  { from { transform: rotateY(0deg);  } to { transform: rotateY(-90deg); } }
+    @keyframes flipIn-left   { from { transform: rotateY(90deg); } to { transform: rotateY(0deg);   } }
+    @keyframes flipOut-right { from { transform: rotateY(0deg);  } to { transform: rotateY(90deg);  } }
+    @keyframes flipIn-right  { from { transform: rotateY(-90deg);} to { transform: rotateY(0deg);   } }
+
+    .half-left.flipping-out  { animation: flipOut-left  var(--half-dur) var(--flip-ease) forwards; }
+    .half-left.flipping-in   { animation: flipIn-left   var(--half-dur) var(--flip-ease) forwards; }
+    .half-right.flipping-out { animation: flipOut-right var(--half-dur) var(--flip-ease) forwards; }
+    .half-right.flipping-in  { animation: flipIn-right  var(--half-dur) var(--flip-ease) forwards; }
+
+    /* prefers-reduced-motion: skip animation classes entirely */
+    @media (prefers-reduced-motion: reduce) {
+      .half.flipping-out, .half.flipping-in { animation: none !important; }
+    }
+
+    /* ══════════════════════════════════════════════
+       PANEL CONTENTS — sit directly inside .half
+       Only one content div is visible at a time.
+       The "active" div has display:flex; the hidden
+       one has display:none (managed by JS + inert).
+    ══════════════════════════════════════════════ */
+    .panel-content {
+      position: absolute; inset: 0;
+      overflow: hidden;
+    }
+    /* Left panel (brand) — gradient bg, rounded left corners */
+    .half-left .panel-content {
+      border-radius: 22px 0 0 22px;
+      background: var(--brand-bg);
+    }
+    /* Right panel (form) — dark bg, rounded right corners */
+    .half-right .panel-content {
+      border-radius: 0 22px 22px 0;
+      background: var(--form-bg);
+    }
+    /* Hidden form panel (right half only) — brand panels are always visible */
+    .half-right .panel-content[inert] { display: none; }
+    /* Brand panels stack; active one sits on top */
+    .half-left .panel-content          { z-index: 1; }
+    .half-left .panel-content.bp-active{ z-index: 2; }
+
+    /* ══════════════════════════════════════════════
+       BRAND INNER LAYOUT
+    ══════════════════════════════════════════════ */
+    .brand-inner {
+      height: 100%; padding: 42px 34px;
+      display: flex; flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+    }
+    .brand-inner::before {
+      content: '';
+      position: absolute; top: -30%; right: -20%;
+      width: 280px; height: 280px;
+      background: radial-gradient(circle, rgba(44,230,200,.18) 0%, transparent 70%);
+      filter: blur(40px); pointer-events: none;
+    }
+
+    .brand-mark {
+      position: relative; z-index: 1;
+      display: inline-flex; align-items: center; gap: 10px;
+    }
+    .brand-icon-box {
+      width: 30px; height: 30px; border-radius: 8px;
+      background: var(--accent-dim); border: 1px solid rgba(44,230,200,.30);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--accent);
+    }
+    .brand-name {
+      font-size: 18px; font-weight: 800;
+      letter-spacing: 2.5px; text-transform: uppercase;
+      color: var(--accent); text-shadow: 0 0 16px rgba(44,230,200,.30);
+    }
+
+    .hero-card {
+      position: relative; z-index: 1;
+      margin: auto 0;
+      padding: 26px 20px 26px 24px;
+      background: rgba(7,16,24,.55);
+      border: 1px solid rgba(255,255,255,.06);
+      border-radius: 16px; backdrop-filter: blur(10px);
+      box-shadow: 0 10px 28px rgba(0,0,0,.35);
+    }
+    .hero-card::before {
+      content: '';
+      position: absolute; left: 0; top: 18px; bottom: 18px; width: 3px;
+      background: linear-gradient(to bottom, var(--accent), transparent);
+      border-radius: 4px;
+    }
+    .hero-line-1 {
+      font-size: 28px; font-weight: 800; line-height: 1.15;
+      letter-spacing: -.4px; color: var(--accent); margin-bottom: 2px;
+    }
+    .hero-line-2 {
+      font-size: 28px; font-weight: 400; line-height: 1.15;
+      letter-spacing: -.4px; color: rgba(255,255,255,.88);
+    }
+
+    .brand-widget {
+      position: relative; z-index: 1;
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 14px;
+      background: rgba(5,14,21,.72);
+      border: 1px solid rgba(44,230,200,.20);
+      border-radius: 12px; backdrop-filter: blur(8px);
+      box-shadow: 0 4px 14px rgba(0,0,0,.28);
+    }
+    .widget-icon {
+      flex: 0 0 30px; width: 30px; height: 30px; border-radius: 8px;
+      background: var(--accent-dim); border: 1px solid rgba(44,230,200,.28);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--accent);
+    }
+    .widget-label {
+      font-size: 9.5px; font-weight: 700;
+      letter-spacing: 1.2px; text-transform: uppercase;
+      color: var(--text-dim); margin-bottom: 2px;
+    }
+    .widget-value {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 11.5px; font-weight: 600; color: var(--accent); line-height: 1.3;
+    }
+    .pulse-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--accent); position: relative; flex-shrink: 0;
+    }
+    .pulse-dot::after {
+      content: '';
+      position: absolute; inset: -4px; border-radius: 50%;
+      border: 1.5px solid var(--accent);
+      animation: pulse 2s cubic-bezier(.24,0,.38,1) infinite;
+    }
+    @keyframes pulse {
+      from { transform: scale(.6); opacity: 1; }
+      to   { transform: scale(2.2); opacity: 0; }
+    }
+
+    /* ══════════════════════════════════════════════
+       FORM INNER LAYOUT
+    ══════════════════════════════════════════════ */
+    .form-scroll {
+      height: 100%; padding: 36px 38px;
+      display: flex; flex-direction: column; justify-content: center;
+      overflow-y: auto; scrollbar-width: none;
+    }
+    .form-scroll::-webkit-scrollbar { display: none; }
+
+    .form-title {
+      font-size: 25px; font-weight: 700;
+      color: #fff; letter-spacing: -.4px; margin-bottom: 4px;
+    }
+    .form-sub { font-size: 13px; color: var(--text-muted); margin-bottom: 20px; }
+
+    /* Error banner */
+    .err-banner {
+      display: flex; align-items: flex-start; gap: 10px;
+      background: rgba(239,68,68,.10); border: 1px solid rgba(239,68,68,.30);
+      padding: 10px 14px; border-radius: 10px;
+      color: #fca5a5; font-size: 12.5px; margin-bottom: 14px;
+      animation: shake .4s cubic-bezier(.36,.07,.19,.97) both;
+    }
+    @keyframes shake {
+      10%,90% { transform: translate3d(-1px,0,0); }
+      20%,80%  { transform: translate3d(2px,0,0);  }
+      30%,50%,70% { transform: translate3d(-3px,0,0); }
+      40%,60%  { transform: translate3d(3px,0,0); }
+    }
+
+    /* Field */
+    .field { margin-bottom: 11px; }
+    .field-lbl {
+      display: block; font-size: 10px; font-weight: 700;
+      color: #94a3b8; letter-spacing: 1.1px; text-transform: uppercase;
+      margin-bottom: 5px;
+    }
+    .field-wrap {
+      display: flex; align-items: center;
+      background: rgba(255,255,255,.03);
+      border: 1px solid var(--border-in);
+      border-radius: 10px;
+      transition: border-color .22s, background .22s, box-shadow .22s;
+    }
+    .field-wrap:hover { border-color: rgba(255,255,255,.20); background: rgba(255,255,255,.045); }
+    .field-wrap:focus-within {
+      border-color: var(--accent);
+      background: rgba(44,230,200,.03);
+      box-shadow: 0 0 0 3px rgba(44,230,200,.13);
+    }
+    .field-ico {
+      padding-left: 12px; flex-shrink: 0;
+      color: #64748b; transition: color .2s;
+      display: flex; align-items: center;
+    }
+    .field-wrap:focus-within .field-ico { color: var(--accent); }
+    .field-inp {
+      flex: 1; min-width: 0;
+      background: transparent; border: none; outline: none;
+      padding: 11px 12px 11px 9px;
+      font-size: 13px; font-family: inherit; color: #f1f5f9;
+    }
+    .field-inp::placeholder { color: #475569; }
+
+    /* Password toggle */
+    .pw-btn {
+      flex-shrink: 0; background: transparent; border: none;
+      padding: 0 12px; height: 100%;
+      color: #64748b; cursor: pointer;
+      display: flex; align-items: center; transition: color .2s;
+    }
+    .pw-btn:hover { color: #cbd5e1; }
+    .pw-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+    /* Options row */
+    .opts-row {
+      display: flex; align-items: center;
+      justify-content: space-between;
+      font-size: 12.5px; margin-bottom: 16px;
+    }
+    .chk-lbl {
+      display: flex; align-items: center; gap: 7px;
+      color: #94a3b8; cursor: pointer; user-select: none;
+    }
+    .chk-lbl input[type=checkbox] {
+      appearance: none; -webkit-appearance: none;
+      width: 15px; height: 15px;
+      background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.20);
+      border-radius: 3px; cursor: pointer;
+      position: relative; transition: all .2s; flex-shrink: 0;
+    }
+    .chk-lbl input[type=checkbox]:checked { background: var(--accent); border-color: var(--accent); }
+    .chk-lbl input[type=checkbox]:checked::after {
+      content: ''; position: absolute; left: 5px; top: 2px;
+      width: 3px; height: 7px;
+      border: solid #09131d; border-width: 0 2px 2px 0; transform: rotate(45deg);
+    }
+    .chk-lbl input[type=checkbox]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .forgot { color: #94a3b8; text-decoration: none; font-weight: 500; transition: color .2s; }
+    .forgot:hover { color: var(--accent); }
+    .forgot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+
+    /* Terms row */
+    .terms-row {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 11.5px; color: #94a3b8; margin-bottom: 13px;
+    }
+    .terms-cb {
+      appearance: none; -webkit-appearance: none;
+      width: 14px; height: 14px; min-width: 14px;
+      background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.20);
+      border-radius: 3px; cursor: pointer;
+      position: relative; transition: all .2s;
+    }
+    .terms-cb:checked { background: var(--accent); border-color: var(--accent); }
+    .terms-cb:checked::after {
+      content: ''; position: absolute; left: 4px; top: 1px;
+      width: 3px; height: 7px;
+      border: solid #09131d; border-width: 0 2px 2px 0; transform: rotate(45deg);
+    }
+    .terms-cb:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .terms-row a { color: var(--accent); text-decoration: none; font-weight: 600; }
+    .terms-row a:hover { text-decoration: underline; }
+    .terms-row a:focus-visible { outline: 2px solid var(--accent); border-radius: 3px; }
+
+    /* Submit button */
+    .btn-sub {
+      width: 100%; padding: 12px 20px;
+      background: linear-gradient(100deg, #2ce6c8 0%, #1fd2b5 50%, #15bb9f 100%);
+      border: none; border-radius: 50px;
+      color: #071318; font-size: 14px; font-weight: 700;
+      font-family: inherit; cursor: pointer;
+      box-shadow: 0 6px 22px rgba(44,230,200,.32), 0 1px 3px rgba(0,0,0,.20);
+      transition: transform .22s, box-shadow .22s, filter .22s;
+    }
+    .btn-sub:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 28px rgba(44,230,200,.42), 0 2px 6px rgba(0,0,0,.28);
+      filter: brightness(1.06);
+    }
+    .btn-sub:active { transform: translateY(0); box-shadow: 0 4px 14px rgba(44,230,200,.28); }
+    .btn-sub:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+    /* Divider */
+    .divider {
+      display: flex; align-items: center;
+      margin: 14px 0 12px;
+      font-size: 10px; font-weight: 700;
+      letter-spacing: 1.2px; text-transform: uppercase; color: var(--text-dim);
+    }
+    .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: rgba(255,255,255,.08); }
+    .divider span { padding: 0 12px; }
+
+    /* Social buttons */
+    .soc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+    .btn-soc {
+      display: inline-flex; align-items: center; justify-content: center;
+      gap: 7px; padding: 9px 12px;
+      background: rgba(255,255,255,.035); border: 1px solid rgba(255,255,255,.08);
+      border-radius: 10px; color: #e2e8f0; font-size: 12.5px; font-weight: 600;
+      text-decoration: none; cursor: pointer;
+      transition: background .2s, border-color .2s, transform .2s;
+    }
+    .btn-soc:hover { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.16); transform: translateY(-1px); }
+    .btn-soc:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .btn-soc svg { width: 15px; height: 15px; }
+
+    /* Mode switch */
+    .mode-sw { text-align: center; font-size: 12.5px; color: #94a3b8; }
+    .sw-btn {
+      background: none; border: none; color: var(--accent);
+      font-size: inherit; font-weight: 700; cursor: pointer;
+      margin-left: 4px; font-family: inherit; transition: opacity .2s;
+    }
+    .sw-btn:hover { opacity: .75; text-decoration: underline; }
+    .sw-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+
+    /* Mobile brand bar */
+    .mob-brand { display: none; align-items: center; gap: 9px; margin-bottom: 18px; }
+    .mob-brand .brand-icon-box { width: 26px; height: 26px; border-radius: 6px; }
+    .mob-brand .brand-name { font-size: 15px; letter-spacing: 2px; }
+
+
+    /* ══════════════════════════════════════════════
+       MOBILE ≤ 760px
+       Drop perspective + flip; crossfade form panels.
+    ══════════════════════════════════════════════ */
+    @media (max-width: 760px) {
+      .auth-card { max-width: 420px; height: auto; perspective: none; }
+      .auth-card::before { border-radius: 18px; }
+      .seam     { display: none; }
+      .half-left { display: none; }
+      .half-right {
+        position: relative; left: 0;
+        width: 100%;
+        transform: none !important;
+        transform-style: flat;
+      }
+      .half-right.flipping-out,
+      .half-right.flipping-in { animation: none !important; }
+      .panel-content {
+        position: relative;
+        border-radius: 18px;
+        overflow: auto;
+      }
+      .panel-content[inert] { display: none; }
+      .form-scroll { padding: 28px 22px; justify-content: flex-start; }
+      .mob-brand { display: flex; }
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-orb" aria-hidden="true"></div>
+  <div id="sr-live" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+
+  <div class="auth-card" id="auth-card" role="main">
+
+    <!-- Fixed seam — the visual hinge the panels flip around -->
+    <div class="seam" aria-hidden="true"></div>
+
+    <!-- ═══════════════════════════════════════════
+         LEFT HALF — always the brand panel
+         Brand content INSIDE changes on flip.
+    ═══════════════════════════════════════════ -->
+    <div class="half half-left" id="half-left">
+
+      <!-- Sign In brand content (initially visible) -->
+      <div class="panel-content" id="brand-si" aria-hidden="true">
+        <div class="brand-inner">
+          <div class="brand-mark">
+            <span class="brand-name">VAYU</span>
+          </div>
+          <div class="hero-card">
+            <div class="hero-line-1">Breathe better.</div>
+            <div class="hero-line-2">Live better.</div>
+          </div>
+          <div class="brand-widget">
+            <div class="widget-icon" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/><path d="M8 12l3 3 5-5"/>
+              </svg>
+            </div>
+            <div>
+              <div class="widget-label">Airflow Status</div>
+              <div class="widget-value">
+                <span class="pulse-dot" aria-hidden="true"></span>
+                <span>Optimal &amp; Purified</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sign Up brand content (hidden until flip) -->
+      <div class="panel-content" id="brand-su" aria-hidden="true">
+        <div class="brand-inner">
+          <div class="brand-mark">
+            <div class="brand-icon-box" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 8c0-1.1.9-2 2-2h10a4 4 0 0 1 0 8H3"/>
+                <path d="M7 16c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2h12a3 3 0 0 1 0 6H6"/>
+              </svg>
+            </div>
+            <span class="brand-name">VAYU</span>
+          </div>
+          <div class="hero-card">
+            <div class="hero-line-1">Better Air.</div>
+            <div class="hero-line-2">Better Future.</div>
+          </div>
+          <div class="brand-widget">
+            <div class="widget-icon" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                <line x1="8" y1="21" x2="16" y2="21"/>
+                <line x1="12" y1="17" x2="12" y2="21"/>
+                <path d="M7 10l3 3 3-4 4 3"/>
+              </svg>
+            </div>
+            <div>
+              <div class="widget-label">Real-Time Monitoring</div>
+              <div class="widget-value">Smart alerts for safer tomorrows.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /half-left -->
+
+    <!-- ═══════════════════════════════════════════
+         RIGHT HALF — always the form panel
+         Form content INSIDE changes on flip.
+    ═══════════════════════════════════════════ -->
+    <div class="half half-right" id="half-right">
+
+      <!-- Sign In form (initially visible) -->
+      <div class="panel-content" id="form-si" aria-labelledby="si-title">
+        <div class="form-scroll">
+
+          <div class="mob-brand" aria-hidden="true">
+            <div class="brand-icon-box">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 8c0-1.1.9-2 2-2h10a4 4 0 0 1 0 8H3"/>
+                <path d="M7 16c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2h12a3 3 0 0 1 0 6H6"/>
+              </svg>
+            </div>
+            <span class="brand-name">VAYU</span>
+          </div>
+
+          <h1 class="form-title stagger" id="si-title">Welcome back</h1>
+          <p class="form-sub stagger">Sign in to monitor your atmosphere.</p>
+
+          {% if auth_mode == 'signin' and form.errors %}
+          <div class="err-banner stagger" role="alert">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <span>Invalid username or password. Please try again.</span>
+          </div>
+          {% endif %}
+
+          <form method="post" action="{% url 'login' %}" id="signin-form" novalidate>
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ next }}">
+
+            <div class="field stagger">
+              <label class="field-lbl" for="si-user">Username</label>
+              <div class="field-wrap">
+                <span class="field-ico" aria-hidden="true">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                       stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                    <circle cx="12" cy="7" r="4"/>
+                  </svg>
+                </span>
+                <input class="field-inp" type="text" name="username" id="si-user"
+                       autocomplete="username" required placeholder="Enter your username">
+              </div>
+            </div>
+
+            <div class="field stagger">
+              <label class="field-lbl" for="si-pass">Password</label>
+              <div class="field-wrap">
+                <span class="field-ico" aria-hidden="true">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                       stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                  </svg>
+                </span>
+                <input class="field-inp" type="password" name="password" id="si-pass"
+                       autocomplete="current-password" required placeholder="••••••••">
+                <button type="button" class="pw-btn" aria-label="Show password" data-target="si-pass">
+                  <svg class="eye-show" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                       stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                  <svg class="eye-hide" style="display:none" width="14" height="14" viewBox="0 0 24 24"
+                       fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                    <line x1="1" y1="1" x2="23" y2="23"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="opts-row stagger">
+              <label class="chk-lbl">
+                <input type="checkbox" name="remember_me" id="si-remember">
+                <span>Remember me</span>
+              </label>
+              <a href="#" class="forgot">Forgot password?</a>
+            </div>
+
+            <button type="submit" class="btn-sub stagger" id="btn-signin">Sign In</button>
+          </form>
+
+          <div class="divider stagger"><span>OR CONTINUE WITH</span></div>
+
+          <div class="soc-grid stagger">
+            <a href="#" class="btn-soc" id="si-google" role="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+              </svg>
+              <span>Google</span>
+            </a>
+            <a href="#" class="btn-soc" id="si-github" role="button">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
+              </svg>
+              <span>GitHub</span>
+            </a>
+          </div>
+
+          <div class="mode-sw stagger">
+            <span>Don't have an account?</span>
+            <button type="button" class="sw-btn" id="goto-signup" onclick="switchMode('signup')">Sign Up</button>
+          </div>
+
+        </div><!-- /form-scroll -->
+      </div><!-- /form-si -->
+
+      <!-- Sign Up form (hidden until flip) -->
+      <div class="panel-content" id="form-su" aria-labelledby="su-title">
+        <div class="form-scroll">
+
+          <div class="mob-brand" aria-hidden="true">
+            <div class="brand-icon-box">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 8c0-1.1.9-2 2-2h10a4 4 0 0 1 0 8H3"/>
+                <path d="M7 16c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2h12a3 3 0 0 1 0 6H6"/>
+              </svg>
+            </div>
+            <span class="brand-name">VAYU</span>
+          </div>
+
+          <h1 class="form-title stagger" id="su-title">Create Account</h1>
+          <p class="form-sub stagger">Join VAYU and start your journey.</p>
+
+          {% if auth_mode == 'signup' and form.errors %}
+          <div class="err-banner stagger" role="alert">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <div>
+              {% for field, errors in form.errors.items %}
+                {% for error in errors %}<div>{{ error }}</div>{% endfor %}
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+
+          <form method="post" action="{% url 'signup' %}" id="signup-form" novalidate>
+            {% csrf_token %}
+
+            <div class="field stagger">
+              <label class="field-lbl" for="su-user">Username</label>
+              <div class="field-wrap">
+                <span class="field-ico" aria-hidden="true">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                       stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                    <circle cx="12" cy="7" r="4"/>
+                  </svg>
+                </span>
+                <input class="field-inp" type="text" name="username" id="su-user"
+                       autocomplete="username"
+                       value="{{ form.username.value|default:'' }}"
+                       required placeholder="Choose a username">
+              </div>
+            </div>
+
+            <div class="field stagger">
+              <label class="field-lbl" for="su-email">Email</label>
+              <div class="field-wrap">
+                <span class="field-ico" aria-hidden="true">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                       stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                    <polyline points="22,6 12,13 2,6"/>
+                  </svg>
+                </span>
+                <input class="field-inp" type="email" name="email" id="su-email"
+                       autocomplete="email"
+                       value="{{ form.email.value|default:'' }}"
+                       required placeholder="Enter your email address">
+              </div>
+            </div>
+
+            <div class="field stagger">
+              <label class="field-lbl" for="su-pw1">Password</label>
+              <div class="field-wrap">
+                <span class="field-ico" aria-hidden="true">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                       stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                  </svg>
+                </span>
+                <input class="field-inp" type="password" name="password1" id="su-pw1"
+                       autocomplete="new-password" required placeholder="Create a password">
+                <button type="button" class="pw-btn" aria-label="Show password" data-target="su-pw1">
+                  <svg class="eye-show" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                       stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                  <svg class="eye-hide" style="display:none" width="14" height="14" viewBox="0 0 24 24"
+                       fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                    <line x1="1" y1="1" x2="23" y2="23"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="field stagger">
+              <label class="field-lbl" for="su-pw2">Confirm Password</label>
+              <div class="field-wrap">
+                <span class="field-ico" aria-hidden="true">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                       stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                  </svg>
+                </span>
+                <input class="field-inp" type="password" name="password2" id="su-pw2"
+                       autocomplete="new-password" required placeholder="Confirm your password">
+                <button type="button" class="pw-btn" aria-label="Show confirm password" data-target="su-pw2">
+                  <svg class="eye-show" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                       stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                  <svg class="eye-hide" style="display:none" width="14" height="14" viewBox="0 0 24 24"
+                       fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                    <line x1="1" y1="1" x2="23" y2="23"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="terms-row stagger">
+              <input type="checkbox" name="agree_terms" id="su-terms"
+                     class="terms-cb" required checked>
+              <label for="su-terms">
+                I agree to the <a href="#">Terms of Service</a> and
+                <a href="#">Privacy Policy</a>
+              </label>
+            </div>
+
+            <button type="submit" class="btn-sub stagger" id="btn-signup">Sign Up &#8594;</button>
+          </form>
+
+          <div class="divider stagger"><span>OR CONTINUE WITH</span></div>
+
+          <div class="soc-grid stagger">
+            <a href="#" class="btn-soc" id="su-google" role="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+              </svg>
+              <span>Google</span>
+            </a>
+            <a href="#" class="btn-soc" id="su-github" role="button">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
+              </svg>
+              <span>GitHub</span>
+            </a>
+          </div>
+
+          <div class="mode-sw stagger">
+            <span>Already have an account?</span>
+            <button type="button" class="sw-btn" id="goto-signin" onclick="switchMode('signin')">Sign In</button>
+          </div>
+
+        </div><!-- /form-scroll -->
+      </div><!-- /form-su -->
+
+    </div><!-- /half-right -->
+
+  </div><!-- /auth-card -->
+
+  <script>
+  (function () {
+    'use strict';
+
+    /* ─── State ─── */
+    var MODE      = '{{ auth_mode|default:"signin" }}';
+    var ANIMATING = false;
+    /* Half-duration in ms — each panel swings out then swings back */
+    var HALF_MS   = 325;
+    var reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reducedMotion) HALF_MS = 1;
+
+    /* ─── DOM refs ─── */
+    var halfLeft  = document.getElementById('half-left');
+    var halfRight = document.getElementById('half-right');
+    var brandSI   = document.getElementById('brand-si');
+    var brandSU   = document.getElementById('brand-su');
+    var formSI    = document.getElementById('form-si');
+    var formSU    = document.getElementById('form-su');
+    var srLive    = document.getElementById('sr-live');
+    var titleSI   = document.getElementById('si-title');
+    var titleSU   = document.getElementById('su-title');
+
+    /* ─── Accessibility helpers ─── */
+    function makeInert(el) {
+      el.setAttribute('inert', '');
+      el.setAttribute('aria-hidden', 'true');
+      el.querySelectorAll('input,button,a,select,textarea,[tabindex]').forEach(function (f) {
+        f.setAttribute('tabindex', '-1');
+      });
+    }
+    function makeActive(el) {
+      el.removeAttribute('inert');
+      el.removeAttribute('aria-hidden');
+      el.querySelectorAll('[tabindex="-1"]').forEach(function (f) {
+        f.removeAttribute('tabindex');
+      });
+    }
+
+    /* ─── Stagger (disabled — content is always static) ─── */
+    function staggerIn(container) {
+      container.querySelectorAll('.stagger').forEach(function (el) {
+        el.style.opacity   = '1';
+        el.style.transform = 'none';
+        el.style.transition = 'none';
+      });
+    }
+
+    /* ─── Remove animation classes once they finish ─── */
+    function clearAnim(el) {
+      el.classList.remove('flipping-out', 'flipping-in');
+    }
+
+    /* ─── Main flip controller ─── */
+    window.switchMode = function (target) {
+      if (target === MODE || ANIMATING) return;
+      ANIMATING = true;
+
+      /* Identify outgoing and incoming content divs */
+      var outBrand = MODE === 'signin' ? brandSI : brandSU;
+      var inBrand  = target === 'signin' ? brandSI : brandSU;
+      var outForm  = MODE === 'signin' ? formSI  : formSU;
+      var inForm   = target === 'signin' ? formSI  : formSU;
+
+      /* Lock outgoing content immediately */
+      makeInert(outForm);
+
+      if (reducedMotion) {
+        /* ── Reduced-motion: instant content swap, no rotation ── */
+        makeInert(outBrand);
+        makeActive(inBrand);
+        makeActive(inForm);
+        staggerIn(inForm, 0);
+        finalise(target, inForm);
+        return;
+      }
+
+      /* ── PHASE 1: both halves swing OUT (0° → 90° / edge-on) ── */
+      halfLeft.classList.add('flipping-out');
+      halfRight.classList.add('flipping-out');
+
+      /* ── PHASE 2 (at midpoint): swap content, swing BACK (–90° → 0°) ── */
+      setTimeout(function () {
+        /* Swap brand panels via z-index (never display:none — always visible) */
+        outBrand.classList.remove('bp-active');
+        inBrand.classList.add('bp-active');
+
+        outForm.style.display  = 'none';
+        inForm.style.display   = '';
+        makeActive(inForm);
+
+        /* Remove out classes, add in classes → swing back */
+        halfLeft.classList.remove('flipping-out');
+        halfRight.classList.remove('flipping-out');
+        halfLeft.classList.add('flipping-in');
+        halfRight.classList.add('flipping-in');
+
+      }, HALF_MS);
+
+      /* ── PHASE 3: animation done — stagger in, focus, announce ── */
+      setTimeout(function () {
+        halfLeft.classList.remove('flipping-in');
+        halfRight.classList.remove('flipping-in');
+
+        staggerIn(inForm, 0);
+
+        document.title = target === 'signup'
+          ? 'VAYU \u2014 Create Account'
+          : 'VAYU \u2014 Sign In';
+
+        srLive.textContent = '';
+        requestAnimationFrame(function () {
+          srLive.textContent = target === 'signup'
+            ? 'Switched to create account.'
+            : 'Switched to sign in.';
+        });
+
+        var heading = target === 'signin' ? titleSI : titleSU;
+        heading.setAttribute('tabindex', '-1');
+        heading.focus({ preventScroll: true });
+
+        MODE      = target;
+        ANIMATING = false;
+      }, HALF_MS * 2 + 60);
+    };
+
+    function finalise(target, inForm) {
+      staggerIn(inForm, 0);
+      document.title = target === 'signup' ? 'VAYU \u2014 Create Account' : 'VAYU \u2014 Sign In';
+      srLive.textContent = '';
+      requestAnimationFrame(function () {
+        srLive.textContent = target === 'signup' ? 'Switched to create account.' : 'Switched to sign in.';
+      });
+      var heading = target === 'signin' ? titleSI : titleSU;
+      heading.setAttribute('tabindex', '-1');
+      heading.focus({ preventScroll: true });
+      MODE = target;
+      ANIMATING = false;
+    }
+
+    /* ─── Password show/hide (event delegation) ─── */
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest('.pw-btn');
+      if (!btn) return;
+      var input   = document.getElementById(btn.dataset.target);
+      if (!input) return;
+      var showing = input.type === 'text';
+      input.type  = showing ? 'password' : 'text';
+      btn.querySelector('.eye-show').style.display = showing ? ''     : 'none';
+      btn.querySelector('.eye-hide').style.display = showing ? 'none' : '';
+      btn.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
+    });
+
+    /* ─── Init: set correct starting state ─── */
+    (function init() {
+      /* Brand panels are decorative (always visible, always inert for a11y).
+         Both sit absolutely in .half-left; z-index determines which is on top. */
+      brandSI.setAttribute('inert', '');
+      brandSU.setAttribute('inert', '');
+
+      if (MODE === 'signup') {
+        /* Sign Up: show brand-su on top, brand-si underneath */
+        brandSU.classList.add('bp-active');
+        /* Hide sign-in form, show sign-up form */
+        formSI.style.display  = 'none';
+        makeInert(formSI);
+        makeActive(formSU);
+        staggerIn(formSU, 80);
+        var f = formSU.querySelector('input:not([type=hidden])');
+        if (f) setTimeout(function () { f.focus({ preventScroll: true }); }, 120);
+      } else {
+        /* Sign In: show brand-si on top (default stacking) */
+        brandSI.classList.add('bp-active');
+        /* Hide sign-up form, show sign-in form */
+        formSU.style.display  = 'none';
+        makeInert(formSU);
+        makeActive(formSI);
+        staggerIn(formSI, 80);
+        var f = formSI.querySelector('input:not([type=hidden])');
+        if (f) setTimeout(function () { f.focus({ preventScroll: true }); }, 120);
+      }
+    }());
+
+  }());
+  </script>
+</body>
+</html>

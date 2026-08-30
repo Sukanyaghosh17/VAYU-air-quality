@@ -4,9 +4,9 @@ dashboard/views.py — Phase 6 frontend views
 All data is fetched client-side by dashboard.js via the DRF API using
 session cookies, so these views only render templates.
 
-  HomeView  — requires login; renders dashboard/index.html
+  HomeView        — requires login; renders dashboard/index.html
   CustomLoginView  — styled login page; redirects to "/" on success
-  LogoutView — POST-only; clears session and redirects to /login/
+  CustomLogoutView — POST-only; clears session and redirects to /login/
 """
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView, LogoutView
@@ -28,10 +28,15 @@ class HomeView(LoginRequiredMixin, TemplateView):
 
 
 class CustomLoginView(LoginView):
-    """Login page with VAYU branding."""
-    template_name = "registration/login.html"
+    """Sign-in panel of the combined animated auth experience."""
+    template_name = "registration/auth.html"
     redirect_authenticated_user = True
     next_page = reverse_lazy("home")
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["auth_mode"] = "signin"
+        return ctx
 
 
 class CustomLogoutView(LogoutView):
