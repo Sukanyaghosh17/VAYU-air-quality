@@ -9,7 +9,7 @@ class SignUpViewTests(TestCase):
     def test_signup_page_loads(self):
         response = self.client.get(reverse("signup"))
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "registration/signup.html")
+        self.assertTemplateUsed(response, "registration/auth.html")
 
     def test_signup_successful_creation_and_login(self):
         response = self.client.post(reverse("signup"), {

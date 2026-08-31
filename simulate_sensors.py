@@ -74,11 +74,30 @@ import signal
 import sys
 import time
 from datetime import date
+from pathlib import Path
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
+# ── Auto-load .env file if present ────────────────────────────────────────────
+def _load_env_file():
+    env_path = Path(__file__).resolve().parent / ".env"
+    if not env_path.exists():
+        return
+    with open(env_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            k = k.strip()
+            v = v.strip().strip("'\"")
+            if k and k not in os.environ:
+                os.environ[k] = v
+
+_load_env_file()
 
 import numpy as np
 import requests
@@ -89,6 +108,20 @@ DEFAULT_URL = "http://127.0.0.1:8000"
 DEFAULT_SENSORS = 3
 DEFAULT_INTERVAL = 3
 DEFAULT_SPIKE_RATE = 0.05
+
+# Preset coordinates for auto-created simulated sensors
+SIM_LOCATIONS = [
+    ("Kolkata Park Street", 22.5535, 88.3519),
+    ("Delhi Connaught Place", 28.6315, 77.2167),
+    ("Mumbai Bandra", 19.0596, 72.8295),
+    ("Bengaluru Indiranagar", 12.9784, 77.6408),
+    ("Hyderabad Hitech City", 17.4435, 78.3772),
+    ("Chennai Marina", 13.0499, 80.2824),
+    ("Pune Shivajinagar", 18.5314, 73.8446),
+    ("Ahmedabad SG Highway", 23.0338, 72.5085),
+    ("Jaipur Pink City", 26.9239, 75.8267),
+]
+
 
 # Baseline distributions: (mean, std, hard_min, hard_max)
 BASELINES = {
@@ -166,13 +199,23 @@ class VayuClient:
         sensors = data.get("results", data) if isinstance(data, dict) else data
         return [s for s in sensors if s.get("status") == "active"]
 
-    def create_sensor(self, code: str, location: str) -> dict:
+    def create_sensor(
+        self,
+        code: str,
+        location: str,
+        lat: float | None = None,
+        lon: float | None = None,
+    ) -> dict:
         payload = {
             "sensor_code": code,
             "location": location,
             "status": "active",
             "installed_at": date.today().isoformat(),
         }
+        if lat is not None:
+            payload["latitude"] = lat
+        if lon is not None:
+            payload["longitude"] = lon
         resp = self.session.post(self._url("/api/v1/sensors/"), json=payload)
         resp.raise_for_status()
         return resp.json()
@@ -225,12 +268,14 @@ def get_or_create_sensors(
     for i in range(needed):
         idx = len(existing) + i + 1
         code = f"SIM-{idx:03d}"
-        loc = f"Simulated Location {idx}"
-        new = client.create_sensor(code, loc)
+        preset = SIM_LOCATIONS[(idx - 1) % len(SIM_LOCATIONS)]
+        loc, lat, lon = preset[0], preset[1], preset[2]
+        new = client.create_sensor(code, loc, lat=lat, lon=lon)
         existing.append(new)
-        print(f"[simulator]   Created {code} (id={new['id']})")
+        print(f"[simulator]   Created {code} at {loc} ({lat}, {lon}) (id={new['id']})")
 
     return existing[:target_count]
+
 
 
 # ── Main loop ─────────────────────────────────────────────────────────────────

@@ -392,7 +392,7 @@ class LocationSearchExternalTests(APITestCase):
             with self.settings(WAQI_API_TOKEN="fake-token"):
                 resp = self.client.get(SEARCH_URL, {"location": "Kolkata"})
         self.assertEqual(resp.status_code, 404)
-        self.assertIn("No air quality data available", resp.data["detail"])
+        self.assertIn("No air quality monitoring station found near", resp.data["detail"])
 
     def test_cache_hit_does_not_re_call_waqi(self):
         """Second identical external lookup uses cache — WAQI called exactly once."""
@@ -479,3 +479,279 @@ class ComputeAqiTests(APITestCase):
     def test_alias_unknown_city_returns_original_only(self):
         terms = resolve_location("Arambagh")
         self.assertEqual(terms, ["Arambagh"])
+
+
+class LocationSearchSanitizationTests(APITestCase):
+    """Tests for query input sanitization and length capping."""
+
+    def setUp(self):
+        self.user, self.token = make_user("sanit_user", role="user")
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.token}")
+        self.sensor_simple = make_sensor(code="KOL-001", location="Kolkata")
+        make_reading(self.sensor_simple, pm25=40.0, pm10=80.0)
+        self.sensor_punct = make_sensor(code="DEL-001", location="New-Delhi, Central.")
+        make_reading(self.sensor_punct, pm25=35.0, pm10=70.0)
+
+    def tearDown(self):
+        django_cache.clear()
+
+    def test_special_characters_stripped_and_matches(self):
+        """Query with special chars like 'Kolkata!@#$' is sanitized to 'Kolkata' and matches."""
+        resp = self.client.get(SEARCH_URL, {"location": "Kolkata!@#$%"})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["results"][0]["sensor_code"], "KOL-001")
+
+    def test_query_with_allowed_punctuation_intact(self):
+        """Allowed chars (hyphens, commas, periods) are preserved."""
+        resp = self.client.get(SEARCH_URL, {"location": "New-Delhi, Central."})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["results"][0]["sensor_code"], "DEL-001")
+
+    def test_query_only_invalid_chars_returns_400(self):
+        """Query containing only invalid symbols returns 400."""
+        resp = self.client.get(SEARCH_URL, {"location": "!@#$%^&*()"})
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("valid characters", resp.data["detail"])
+
+    def test_query_length_capped_at_100(self):
+        """Query longer than 100 characters is capped without crashing."""
+        long_query = "Kolkata" + ("x" * 200)
+        resp = self.client.get(SEARCH_URL, {"location": long_query})
+        self.assertIn(resp.status_code, [200, 404])
+
+
+class LocationSearchGeolocationTests(APITestCase):
+    """Tests for lat/lon coordinate geolocation search path."""
+
+    def setUp(self):
+        self.user, self.token = make_user("geo_user", role="user")
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.token}")
+
+    def tearDown(self):
+        django_cache.clear()
+
+    def test_missing_one_coordinate_returns_400(self):
+        resp = self.client.get(SEARCH_URL, {"lat": "22.5726"})
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("Both ?lat= and ?lon=", resp.data["detail"])
+
+    def test_invalid_float_returns_400(self):
+        resp = self.client.get(SEARCH_URL, {"lat": "abc", "lon": "88.3639"})
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("valid floating-point", resp.data["detail"])
+
+    def test_out_of_range_coords_returns_400(self):
+        resp = self.client.get(SEARCH_URL, {"lat": "95.0", "lon": "88.3639"})
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("out of valid range", resp.data["detail"])
+
+    @patch("sensors.views.fetch_external_aqi")
+    def test_valid_coords_success_uses_rounded_cache_key(self, mock_fetch):
+        mock_fetch.return_value = {
+            "source": "external_waqi",
+            "station_name": "Fort William Kolkata",
+            "aqi": 88,
+            "category": "Satisfactory",
+            "pm25": 28.0,
+            "pm10": 55.0,
+            "temperature": 29.0,
+            "humidity": 65.0,
+            "dominant_pollutant": "pm25",
+            "updated_at": "2026-08-31T09:00:00Z",
+        }
+        resp = self.client.get(SEARCH_URL, {"lat": "22.572612", "lon": "88.363891"})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["results"][0]["station_name"], "Fort William Kolkata")
+        
+        # Verify fetch_external_aqi was called with rounded coordinates in cache key
+        mock_fetch.assert_called_once_with(
+            22.572612, 88.363891, "vayu_waqi_geo_22.573_88.364"
+        )
+
+    @patch("sensors.views.fetch_external_aqi", return_value=None)
+    def test_valid_coords_not_found_returns_404(self, mock_fetch):
+        resp = self.client.get(SEARCH_URL, {"lat": "0.0", "lon": "0.0"})
+        self.assertEqual(resp.status_code, 404)
+        self.assertIn("No air quality", resp.data["detail"])
+
+
+from sensors.external_aqi import fetch_external_aqi
+
+
+class WaqiFallbackChainTests(APITestCase):
+    """Unit tests for the multi-step WAQI fallback chain."""
+
+    def tearDown(self):
+        django_cache.clear()
+
+    @patch("sensors.external_aqi._fetch_waqi_json")
+    def test_step_a_geo_lookup_success(self, mock_fetch):
+        """Step A: geo:<lat>;<lon> returns station data directly."""
+        mock_fetch.return_value = {
+            "city": {"name": "Mandir Marg, Delhi", "geo": [28.6139, 77.2090]},
+            "aqi": 72,
+            "iaqi": {"pm25": {"v": 22.0}, "pm10": {"v": 45.0}},
+            "time": {"iso": "2026-08-31T09:00:00Z"},
+            "dominentpol": "pm10",
+        }
+        res = fetch_external_aqi(28.6139, 77.2090, "cache_geo_test", query="Delhi")
+        self.assertIsNotNone(res)
+        self.assertEqual(res["fallback_step"], "geo")
+        self.assertEqual(res["station_name"], "Mandir Marg, Delhi")
+        self.assertEqual(res["aqi"], 45)
+        self.assertEqual(res["category"], "Good")
+
+    @patch("sensors.external_aqi._fetch_waqi_json")
+    def test_step_b_keyword_search_success_when_geo_fails(self, mock_fetch):
+        """Step B: geo fails, keyword search returns matching station."""
+        def fake_fetch(url):
+            if "feed/geo:" in url:
+                return None
+            if "search/?keyword=Kolkata" in url:
+                return [
+                    {
+                        "uid": 12746,
+                        "station": {"name": "Ballygunge, Kolkata, India", "geo": [22.528, 88.365]},
+                        "aqi": 109,
+                    }
+                ]
+            if "feed/@12746" in url:
+                return {
+                    "city": {"name": "Ballygunge, Kolkata, India"},
+                    "aqi": 109,
+                    "iaqi": {"pm25": {"v": 58.0}, "pm10": {"v": 102.0}},
+                    "time": {"iso": "2026-08-31T09:00:00Z"},
+                    "dominentpol": "pm25",
+                }
+            return None
+
+        mock_fetch.side_effect = fake_fetch
+        res = fetch_external_aqi(22.5726, 88.3639, "cache_kw_test", query="Kolkata")
+        self.assertIsNotNone(res)
+        self.assertEqual(res["fallback_step"], "keyword")
+        self.assertEqual(res["station_name"], "Ballygunge, Kolkata, India")
+        self.assertEqual(res["aqi"], 102)
+
+    @patch("sensors.external_aqi._fetch_waqi_json")
+    def test_step_c_india_suffix_success_when_geo_and_keyword_fail(self, mock_fetch):
+        """Step C: geo and bare keyword fail, query + ', India' suffix succeeds."""
+        def fake_fetch(url):
+            if "feed/geo:" in url:
+                return None
+            if "search/?keyword=Siliguri&" in url:
+                return []
+            if "search/?keyword=Siliguri" in url and "India" in url:
+                return [
+                    {
+                        "uid": 11290,
+                        "station": {"name": "Ward-32 Bapupara, Siliguri, India", "geo": [26.71, 88.43]},
+                        "aqi": 50,
+                    }
+                ]
+            if "feed/@11290" in url:
+                return {
+                    "city": {"name": "Ward-32 Bapupara, Siliguri, India"},
+                    "aqi": 50,
+                    "iaqi": {"pm25": {"v": 25.0}, "pm10": {"v": 48.0}},
+                    "time": {"iso": "2026-08-31T09:00:00Z"},
+                    "dominentpol": "pm25",
+                }
+            return None
+
+        mock_fetch.side_effect = fake_fetch
+        res = fetch_external_aqi(26.7271, 88.3953, "cache_india_test", query="Siliguri")
+        self.assertIsNotNone(res)
+        self.assertEqual(res["fallback_step"], "keyword_india")
+        self.assertEqual(res["station_name"], "Ward-32 Bapupara, Siliguri, India")
+        self.assertEqual(res["aqi"], 48)
+
+    @patch("sensors.external_aqi._fetch_waqi_json", return_value=None)
+    def test_all_steps_fail_returns_none(self, mock_fetch):
+        """Step E: When all endpoints fail, fetch_external_aqi returns None."""
+        res = fetch_external_aqi(20.0, 80.0, "cache_fail_test", query="RemoteVillage")
+        self.assertIsNone(res)
+
+
+# ── SensorMapView tests ───────────────────────────────────────────────────────
+
+class SensorMapViewTests(APITestCase):
+    def setUp(self):
+        self.user, self.user_token = make_user("map_test_user", role="user")
+        self.url = "/api/v1/sensors/map/"
+
+        # Sensor 1: Has valid lat/lon and reading
+        self.s1 = Sensor.objects.create(
+            sensor_code="SEN-MAP-1",
+            location="Kolkata Central",
+            status="active",
+            installed_at="2025-01-01",
+            latitude=22.5726,
+            longitude=88.3639,
+        )
+        make_reading(self.s1, pm25=35.0, pm10=70.0, temperature=28.5, humidity=65.0)
+
+        # Sensor 2: Has valid lat/lon but NO readings
+        self.s2 = Sensor.objects.create(
+            sensor_code="SEN-MAP-2",
+            location="Delhi South",
+            status="active",
+            installed_at="2025-01-01",
+            latitude=28.5355,
+            longitude=77.2410,
+        )
+
+        # Sensor 3: Missing latitude/longitude (should be excluded from map)
+        self.s3 = Sensor.objects.create(
+            sensor_code="SEN-MAP-3",
+            location="Ungeocoded Station",
+            status="active",
+            installed_at="2025-01-01",
+            latitude=None,
+            longitude=None,
+        )
+        make_reading(self.s3, pm25=20.0, pm10=40.0)
+
+    def test_unauthenticated_request_rejected(self):
+        """GET /api/v1/sensors/map/ requires authentication."""
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_returns_correct_shape_and_excludes_null_coordinates(self):
+        """Returns only geocoded sensors, with latest reading and computed AQI."""
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.user_token}")
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+        data = resp.json()
+        self.assertEqual(len(data), 2)  # s1 and s2 only, s3 excluded
+
+        codes = [s["sensor_code"] for s in data]
+        self.assertIn("SEN-MAP-1", codes)
+        self.assertIn("SEN-MAP-2", codes)
+        self.assertNotIn("SEN-MAP-3", codes)
+
+        # Verify s1 structure and values
+        s1_data = next(s for s in data if s["sensor_code"] == "SEN-MAP-1")
+        self.assertEqual(s1_data["location"], "Kolkata Central")
+        self.assertAlmostEqual(s1_data["latitude"], 22.5726)
+        self.assertAlmostEqual(s1_data["longitude"], 88.3639)
+        self.assertEqual(s1_data["status"], "active")
+        self.assertEqual(s1_data["pm25"], 35.0)
+        self.assertEqual(s1_data["pm10"], 70.0)
+        self.assertEqual(s1_data["temperature"], 28.5)
+        self.assertEqual(s1_data["humidity"], 65.0)
+        self.assertIsNotNone(s1_data["aqi"])
+        self.assertEqual(s1_data["aqi_category"], "Satisfactory")
+        self.assertIsNotNone(s1_data["timestamp"])
+
+        # Verify s2 structure (no readings -> null/NA fields handled gracefully)
+        s2_data = next(s for s in data if s["sensor_code"] == "SEN-MAP-2")
+        self.assertAlmostEqual(s2_data["latitude"], 28.5355)
+        self.assertAlmostEqual(s2_data["longitude"], 77.2410)
+        self.assertIsNone(s2_data["pm25"])
+        self.assertIsNone(s2_data["pm10"])
+        self.assertIsNone(s2_data["aqi"])
+        self.assertEqual(s2_data["aqi_category"], "N/A")
+        self.assertIsNone(s2_data["timestamp"])
+
+

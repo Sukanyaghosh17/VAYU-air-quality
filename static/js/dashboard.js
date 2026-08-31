@@ -32,7 +32,7 @@ const state = {
 
 /* ── API helpers ─────────────────────────────────────────────── */
 const API = {
-  get: (path) => fetch(path, { credentials: 'same-origin' }).then(r => {
+  get: (path, opts = {}) => fetch(path, { credentials: 'same-origin', signal: opts.signal }).then(r => {
     if (!r.ok) throw Object.assign(new Error(`API ${path} → ${r.status}`), { status: r.status, _resp: r });
     return r.json();
   }),
@@ -410,6 +410,11 @@ function showExternalView(result, query) {
 
   state.searchMode = 'external';
   state.currentLocation = query;
+
+  // Mirror the external result onto the map (if map tab is open or was opened before)
+  if (typeof window.mapDropExternalMarker === 'function') {
+    window.mapDropExternalMarker(result, query);
+  }
 }
 
 function showEmptyState(query, message) {
@@ -427,14 +432,32 @@ function showEmptyState(query, message) {
   state.searchMode = 'empty';
 }
 
-/* ── Location search ─────────────────────────────────────────── */
-async function searchByLocation(query) {
-  query = query.trim();
-  if (!query) {
+/* ── Location search & Geolocation ───────────────────────────── */
+let currentSearchAbortController = null;
+
+async function searchByLocation(query, options = {}) {
+  const trimmed = (query || '').trim();
+  if (!trimmed) {
+    if (currentSearchAbortController) {
+      currentSearchAbortController.abort();
+      currentSearchAbortController = null;
+    }
     showFleetView();
     await refreshReadings();
     return;
   }
+
+  // Duplicate-request guard: if already showing this location, do not refetch unless forced
+  if (!options.force && state.searchMode !== 'fleet' && state.currentLocation.toLowerCase() === trimmed.toLowerCase()) {
+    return;
+  }
+
+  // Cancel any prior in-flight search
+  if (currentSearchAbortController) {
+    currentSearchAbortController.abort();
+  }
+  currentSearchAbortController = new AbortController();
+  const signal = currentSearchAbortController.signal;
 
   const inp = document.getElementById('location-input');
   const btn = document.getElementById('search-btn');
@@ -443,32 +466,107 @@ async function searchByLocation(query) {
 
   try {
     const data = await API.get(
-      `/api/v1/sensors/search/?location=${encodeURIComponent(query)}`
+      `/api/v1/sensors/search/?location=${encodeURIComponent(trimmed)}`,
+      { signal }
     );
     const results = data.results ?? [];
     if (!results.length) {
-      showEmptyState(query, 'The search returned no results.');
+      showEmptyState(trimmed, 'The search returned no results.');
       return;
     }
     const firstSource = results[0].source;
     if (firstSource === 'vayu_sensor') {
-      showVayuSensorView(results, query);
+      showVayuSensorView(results, trimmed);
     } else {
-      showExternalView(results[0], query);
+      showExternalView(results[0], trimmed);
     }
   } catch (err) {
+    if (err.name === 'AbortError') {
+      // Cleanly ignore aborted searches (e.g. from rapid keystrokes / Enter spam)
+      return;
+    }
     // On 404 use exact detail message from backend
-    let msg = `Could not find air quality data for "${query}".`;
+    let msg = `Could not find air quality data for "${trimmed}".`;
     if (err._resp) {
       try {
         const body = await err._resp.json();
         if (body.detail) msg = body.detail;
       } catch (_) {}
     }
-    showEmptyState(query, msg);
+    showEmptyState(trimmed, msg);
   } finally {
+    if (currentSearchAbortController?.signal === signal) {
+      currentSearchAbortController = null;
+    }
     inp.classList.remove('loading');
     btn.disabled = false;
+  }
+}
+
+async function searchByCoordinates(lat, lon) {
+  // Cancel any prior in-flight search
+  if (currentSearchAbortController) {
+    currentSearchAbortController.abort();
+  }
+  currentSearchAbortController = new AbortController();
+  const signal = currentSearchAbortController.signal;
+
+  const inp = document.getElementById('location-input');
+  const btn = document.getElementById('search-btn');
+  const geoBtn = document.getElementById('search-geo-btn');
+  const clr = document.getElementById('search-clear-btn');
+
+  inp.classList.add('loading');
+  btn.disabled = true;
+  if (geoBtn) {
+    geoBtn.classList.add('loading');
+    geoBtn.disabled = true;
+  }
+
+  try {
+    const data = await API.get(
+      `/api/v1/sensors/search/?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`,
+      { signal }
+    );
+    const results = data.results ?? [];
+    if (!results.length) {
+      showEmptyState(`${lat.toFixed(3)}, ${lon.toFixed(3)}`, 'No air quality data available for your coordinates.');
+      return;
+    }
+
+    const locationLabel = data.query || results[0].station_name || `${lat.toFixed(3)}, ${lon.toFixed(3)}`;
+    if (inp) {
+      inp.value = locationLabel;
+      if (clr) clr.style.display = 'flex';
+    }
+
+    const firstSource = results[0].source;
+    if (firstSource === 'vayu_sensor') {
+      showVayuSensorView(results, locationLabel);
+    } else {
+      showExternalView(results[0], locationLabel);
+    }
+  } catch (err) {
+    if (err.name === 'AbortError') return;
+
+    let msg = `No air quality data available for coordinates (${lat.toFixed(3)}, ${lon.toFixed(3)}).`;
+    if (err._resp) {
+      try {
+        const body = await err._resp.json();
+        if (body.detail) msg = body.detail;
+      } catch (_) {}
+    }
+    showEmptyState(`${lat.toFixed(3)}, ${lon.toFixed(3)}`, msg);
+  } finally {
+    if (currentSearchAbortController?.signal === signal) {
+      currentSearchAbortController = null;
+    }
+    inp.classList.remove('loading');
+    btn.disabled = false;
+    if (geoBtn) {
+      geoBtn.classList.remove('loading');
+      geoBtn.disabled = false;
+    }
   }
 }
 
@@ -477,6 +575,7 @@ function initSearchBar() {
   const inp  = document.getElementById('location-input');
   const btn  = document.getElementById('search-btn');
   const clr  = document.getElementById('search-clear-btn');
+  const geoBtn = document.getElementById('search-geo-btn');
   const ctxClr = document.getElementById('location-context-clear');
 
   if (!inp) return;
@@ -489,15 +588,61 @@ function initSearchBar() {
 
   // Trigger search on Enter key
   inp.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') searchByLocation(inp.value);
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      searchByLocation(inp.value);
+    }
   });
 
   btn.addEventListener('click', () => searchByLocation(inp.value));
+
+  // Geolocation pin button
+  if (geoBtn) {
+    geoBtn.addEventListener('click', () => {
+      if (!navigator.geolocation) {
+        showEmptyState('Current Location', 'Geolocation is not supported by your browser.');
+        return;
+      }
+
+      geoBtn.classList.add('loading');
+      geoBtn.disabled = true;
+
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          const { latitude, longitude } = pos.coords;
+          await searchByCoordinates(latitude, longitude);
+        },
+        (err) => {
+          geoBtn.classList.remove('loading');
+          geoBtn.disabled = false;
+
+          let msg = 'Could not determine your location. Please search for your city manually.';
+          if (err.code === 1 /* PERMISSION_DENIED */) {
+            msg = 'Location access was denied. Please search for your city manually or allow location access in your browser settings.';
+          } else if (err.code === 2 /* POSITION_UNAVAILABLE */) {
+            msg = 'Location position unavailable. Please search for your city manually.';
+          } else if (err.code === 3 /* TIMEOUT */) {
+            msg = 'Location request timed out. Please search for your city manually.';
+          }
+          showEmptyState('Current Location', msg);
+        },
+        {
+          timeout: 10000,
+          maximumAge: 60000,
+          enableHighAccuracy: false,
+        }
+      );
+    });
+  }
 
   // Clear button resets to fleet view
   clr.addEventListener('click', () => {
     inp.value = '';
     clr.style.display = 'none';
+    if (currentSearchAbortController) {
+      currentSearchAbortController.abort();
+      currentSearchAbortController = null;
+    }
     showFleetView();
     refreshReadings();
   });
@@ -507,6 +652,10 @@ function initSearchBar() {
     ctxClr.addEventListener('click', () => {
       inp.value = '';
       clr.style.display = 'none';
+      if (currentSearchAbortController) {
+        currentSearchAbortController.abort();
+        currentSearchAbortController = null;
+      }
       state.currentLocation = '';
       state.selectedSensorId = null;
       showFleetView();

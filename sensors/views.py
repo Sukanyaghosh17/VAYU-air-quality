@@ -278,12 +278,16 @@ class SensorReadingViewSet(
         return Response(result)
 
 
+import re
+
+
 class LocationSearchView(APIView):
     """
     GET /api/v1/sensors/search/?location=<query>
+    GET /api/v1/sensors/search/?lat=<latitude>&lon=<longitude>
 
-    3-step search flow:
-    -------------------
+    3-step search flow (by name):
+    -----------------------------
     1. Internal: case-insensitive partial match on Sensor.location (also
        checks CITY_ALIASES so "Bangalore" hits sensors stored as "Bengaluru").
        Returns VAYU's own live sensor data tagged source="vayu_sensor".
@@ -295,6 +299,11 @@ class LocationSearchView(APIView):
        geocoded coordinates.  Results are cached 15 minutes per location.
        Returns 404 if WAQI has no nearby station.
 
+    Direct coordinate search (by lat/lon):
+    --------------------------------------
+    Directly fetches nearest WAQI monitoring station data for given (lat, lon)
+    with a rounded-coordinate 15-minute cache key.
+
     Session: stores the searched location in request.session["last_location"]
     on every successful match (internal or external).
 
@@ -304,12 +313,72 @@ class LocationSearchView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        query = request.query_params.get("location", "").strip()
-        if not query:
+        lat_param = request.query_params.get("lat") or request.query_params.get("latitude")
+        lon_param = request.query_params.get("lon") or request.query_params.get("longitude")
+
+        # ── Branch A: Coordinate-based search (Geolocation) ───────────────────
+        if lat_param is not None or lon_param is not None:
+            if lat_param is None or lon_param is None:
+                return Response(
+                    {"detail": "Both ?lat= and ?lon= parameters are required for coordinate search."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            try:
+                lat = float(lat_param)
+                lon = float(lon_param)
+            except (TypeError, ValueError):
+                return Response(
+                    {"detail": "Latitude and longitude must be valid floating-point numbers."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
+                return Response(
+                    {"detail": "Coordinates out of valid range (lat: -90..90, lon: -180..180)."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            rounded_lat = round(lat, 3)
+            rounded_lon = round(lon, 3)
+            cache_key = f"vayu_waqi_geo_{rounded_lat:.3f}_{rounded_lon:.3f}"
+
+            external = fetch_external_aqi(lat, lon, cache_key)
+            if external is None:
+                token = getattr(settings, "WAQI_API_TOKEN", "")
+                if not token:
+                    detail = (
+                        f"No WAQI_API_TOKEN is configured. Set it in .env to enable public AQI data."
+                    )
+                else:
+                    detail = f"No air quality data available for coordinates ({lat:.4f}, {lon:.4f})."
+                return Response({"detail": detail}, status=status.HTTP_404_NOT_FOUND)
+
+            location_label = external.get("station_name") or f"{lat:.4f}, {lon:.4f}"
+            request.session["last_location"] = location_label
+            return Response({"query": location_label, "results": [external]})
+
+        # ── Branch B: Text-based location search ──────────────────────────────
+        raw_query = request.query_params.get("location", "")
+        if not raw_query or not raw_query.strip():
             return Response(
                 {"detail": "?location=<city name> is required."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        # Length cap (100 characters max)
+        capped_query = raw_query[:100].strip()
+
+        # Regex whitelist: letters, numbers, spaces, commas, hyphens, periods only
+        sanitized_query = re.sub(r"[^\w\s,.-]", "", capped_query, flags=re.UNICODE).strip()
+        sanitized_query = re.sub(r"\s+", " ", sanitized_query)
+
+        if not sanitized_query:
+            return Response(
+                {"detail": "Location query contains no valid characters."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        query = sanitized_query
 
         # ── Step 1: internal sensor match ─────────────────────────────────────
         # Build OR filter covering the original query + any city alias
@@ -379,10 +448,11 @@ class LocationSearchView(APIView):
             )
 
         lat, lon = coords
-        cache_key = f"vayu_waqi_{query.lower().strip()}"
+        safe_key = re.sub(r"[^a-zA-Z0-9_-]", "_", query.lower().strip())
+        cache_key = f"vayu_waqi_{safe_key}"
 
-        # ── Step 3: external AQI via WAQI ─────────────────────────────────────
-        external = fetch_external_aqi(lat, lon, cache_key)
+        # ── Step 3: external AQI via WAQI (multi-step fallback) ───────────────
+        external = fetch_external_aqi(lat, lon, cache_key, query=query)
         if external is None:
             token = getattr(settings, "WAQI_API_TOKEN", "")
             if not token:
@@ -391,9 +461,94 @@ class LocationSearchView(APIView):
                     f"is configured. Set it in .env to enable public AQI data."
                 )
             else:
-                detail = f"No air quality data available for '{query}' from any source."
+                detail = f"No air quality monitoring station found near '{query}'. Try a nearby larger city."
             return Response({"detail": detail}, status=status.HTTP_404_NOT_FOUND)
 
         # External result — return wrapped in uniform results list
         request.session["last_location"] = query
         return Response({"query": query, "results": [external]})
+
+
+class SensorMapView(APIView):
+    """
+    GET /api/v1/sensors/map/
+
+    Returns all VAYU sensors that have coordinates (latitude + longitude set),
+    along with their latest AQI reading. Sensors with null lat/lon are silently
+    excluded — they simply have no point to place on the map.
+
+    Response shape per sensor:
+    {
+        "id":           int,
+        "sensor_code":  str,
+        "location":     str,
+        "latitude":     float,
+        "longitude":    float,
+        "status":       str,
+        "aqi":          int | null,
+        "aqi_category": str,
+        "pm25":         float | null,
+        "pm10":         float | null,
+        "temperature":  float | null,
+        "humidity":     float | null,
+        "timestamp":    str (ISO 8601) | null
+    }
+
+    Requires authentication (IsAuthenticated). Read-only endpoint.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        # Only sensors that have geocoordinates set
+        geocoded_sensors = (
+            Sensor.objects
+            .exclude(latitude__isnull=True)
+            .exclude(longitude__isnull=True)
+            .order_by("sensor_code")
+        )
+
+        # For each geocoded sensor, fetch the latest reading via correlated subquery
+        latest_pk_sq = (
+            SensorReading.objects
+            .filter(sensor=OuterRef("pk"))
+            .order_by("-timestamp")
+            .values("pk")[:1]
+        )
+        sensors_with_latest = (
+            geocoded_sensors
+            .annotate(latest_pk=Subquery(latest_pk_sq))
+        )
+
+        # Build a mapping from sensor pk → latest SensorReading for efficient lookup
+        latest_pks = [s.latest_pk for s in sensors_with_latest if s.latest_pk is not None]
+        latest_readings = {
+            r.sensor_id: r
+            for r in SensorReading.objects.filter(pk__in=latest_pks).select_related("sensor")
+        }
+
+        results = []
+        for sensor in sensors_with_latest:
+            reading = latest_readings.get(sensor.pk)
+            aqi_data = compute_aqi(
+                reading.pm25 if reading else None,
+                reading.pm10 if reading else None,
+            )
+            results.append({
+                "id":           sensor.pk,
+                "sensor_code":  sensor.sensor_code,
+                "location":     sensor.location,
+                "latitude":     sensor.latitude,
+                "longitude":    sensor.longitude,
+                "status":       sensor.status,
+                "aqi":          aqi_data["aqi"],
+                "aqi_category": aqi_data["category"],
+                "pm25":         reading.pm25 if reading else None,
+                "pm10":         reading.pm10 if reading else None,
+                "temperature":  reading.temperature if reading else None,
+                "humidity":     reading.humidity if reading else None,
+                "timestamp":    reading.timestamp.isoformat() if reading else None,
+            })
+
+        return Response(results)
+
