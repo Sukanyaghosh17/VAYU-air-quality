@@ -67,6 +67,8 @@ Uses DRF Token auth.  Set up the simulator user once:
 Then set SIMULATOR_TOKEN=<key> in .env or pass --token <key>.
 """
 
+from __future__ import annotations
+
 import argparse
 import os
 import random
@@ -99,7 +101,6 @@ def _load_env_file():
 
 _load_env_file()
 
-import numpy as np
 import requests
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -166,7 +167,7 @@ def generate_reading(spike_rate: float) -> dict:
     reading = {}
     for param, (mean, std, hard_min, hard_max) in BASELINES.items():
         # Sample from Gaussian baseline
-        value = float(np.random.normal(mean, std))
+        value = float(random.gauss(mean, std))
         # Inject spike with probability spike_rate
         if random.random() < spike_rate:
             value = SPIKE_FN[param](value)
