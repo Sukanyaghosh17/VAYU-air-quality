@@ -5,10 +5,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="VAYU — Air Quality Monitoring Platform">
-  <title>VAYU — {% if auth_mode == 'signup' %}Create Account{% else %}Sign In{% endif %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
   <style>
     /* ══════════════════════════════════════════════
        Design tokens
@@ -368,10 +368,113 @@
       width: 3px; height: 7px;
       border: solid #09131d; border-width: 0 2px 2px 0; transform: rotate(45deg);
     }
-    .chk-lbl input[type=checkbox]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-    .forgot { color: #94a3b8; text-decoration: none; font-weight: 500; transition: color .2s; }
-    .forgot:hover { color: var(--accent); }
-    .forgot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+    /* ── Password Strength Box & Progress Bar ── */
+    .strength-box {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 7px;
+      margin-bottom: 5px;
+      gap: 12px;
+    }
+
+    #strengthText {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      color: #94a3b8;
+      min-width: 60px;
+      transition: color 0.3s ease;
+    }
+
+    .progress {
+      flex: 1;
+      height: 5px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 99px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    #progressBar {
+      height: 100%;
+      width: 0%;
+      background: #ef4444;
+      border-radius: 99px;
+      transition: width 0.4s ease, background 0.4s ease, box-shadow 0.4s ease;
+    }
+
+    .progress.strong #progressBar {
+      width: 100%;
+      background: #22c55e;
+      box-shadow: 0 0 10px rgba(34, 197, 94, 0.4);
+    }
+
+    /* ── Validation Rules ── */
+    .rules {
+      list-style: none;
+      padding: 0;
+      margin: 6px 0 10px 0;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 4px 10px;
+    }
+
+    .rules li {
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: color 0.25s ease;
+      font-weight: 500;
+      color: #64748b;
+    }
+
+    .rules li.invalid {
+      color: #ef4444;
+    }
+
+    .rules li.valid {
+      color: #16a34a;
+    }
+
+    .rules li .rule-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      transition: all 0.25s ease;
+      flex-shrink: 0;
+    }
+
+    .rules li.invalid .rule-icon {
+      color: #ef4444;
+    }
+
+    .rules li.valid .rule-icon {
+      color: #22c55e;
+    }
+
+    /* Password Match Status */
+    .password-match-status {
+      font-size: 11px;
+      margin-top: 5px;
+      display: none;
+      align-items: center;
+      gap: 5px;
+      font-weight: 500;
+    }
+
+    .password-match-status.match {
+      color: #22c55e;
+      display: flex;
+    }
+
+    .password-match-status.mismatch {
+      color: #ef4444;
+      display: flex;
+    }
 
     /* Terms row */
     .terms-row {
@@ -440,7 +543,13 @@
     .btn-soc svg { width: 15px; height: 15px; }
 
     /* Mode switch */
-    .mode-sw { text-align: center; font-size: 12.5px; color: #94a3b8; }
+    .mode-sw {
+      text-align: center;
+      font-size: 12.5px;
+      color: #94a3b8;
+      margin-top: 22px;
+      padding-top: 2px;
+    }
     .sw-btn {
       background: none; border: none; color: var(--accent);
       font-size: inherit; font-weight: 700; cursor: pointer;
@@ -716,55 +825,43 @@
 
             <div class="field stagger">
               <label class="field-lbl" for="su-pw1">Password</label>
-              <div class="field-wrap">
+              <div class="field-wrap input-box">
                 <span class="field-ico" aria-hidden="true">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-                       stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                  </svg>
+                  <i class="fa-solid fa-lock"></i>
                 </span>
                 <input class="field-inp" type="password" name="password1" id="su-pw1"
                        autocomplete="new-password" required placeholder="Create a password">
-                <button type="button" class="pw-btn" aria-label="Show password" data-target="su-pw1">
-                  <svg class="eye-show" width="14" height="14" viewBox="0 0 24 24" fill="none"
-                       stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                    <circle cx="12" cy="12" r="3"/>
-                  </svg>
-                  <svg class="eye-hide" style="display:none" width="14" height="14" viewBox="0 0 24 24"
-                       fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
-                    <line x1="1" y1="1" x2="23" y2="23"/>
-                  </svg>
+                <button type="button" class="pw-btn password-toggle-btn" id="togglePassword" aria-label="Show password" data-target="su-pw1">
+                  <i class="fa-solid fa-eye eye-show"></i>
+                  <i class="fa-solid fa-eye-slash eye-hide" style="display:none"></i>
                 </button>
+              </div>
+
+              <!-- Password Strength Indicator -->
+              <div class="strength-box">
+                <span id="strengthText">Strength</span>
+                <div class="progress">
+                  <div id="progressBar"></div>
+                </div>
               </div>
             </div>
 
             <div class="field stagger">
               <label class="field-lbl" for="su-pw2">Confirm Password</label>
-              <div class="field-wrap">
+              <div class="field-wrap input-box">
                 <span class="field-ico" aria-hidden="true">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-                       stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                  </svg>
+                  <i class="fa-solid fa-shield-halved"></i>
                 </span>
                 <input class="field-inp" type="password" name="password2" id="su-pw2"
                        autocomplete="new-password" required placeholder="Confirm your password">
-                <button type="button" class="pw-btn" aria-label="Show confirm password" data-target="su-pw2">
-                  <svg class="eye-show" width="14" height="14" viewBox="0 0 24 24" fill="none"
-                       stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                    <circle cx="12" cy="12" r="3"/>
-                  </svg>
-                  <svg class="eye-hide" style="display:none" width="14" height="14" viewBox="0 0 24 24"
-                       fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
-                    <line x1="1" y1="1" x2="23" y2="23"/>
-                  </svg>
+                <button type="button" class="pw-btn password-toggle-btn" aria-label="Show confirm password" data-target="su-pw2">
+                  <i class="fa-solid fa-eye eye-show"></i>
+                  <i class="fa-solid fa-eye-slash eye-hide" style="display:none"></i>
                 </button>
+              </div>
+              <div class="password-match-status" id="matchStatus">
+                <i class="fa-solid fa-circle-check"></i>
+                <span>Passwords match</span>
               </div>
             </div>
 
@@ -940,10 +1037,91 @@
       if (!input) return;
       var showing = input.type === 'text';
       input.type  = showing ? 'password' : 'text';
-      btn.querySelector('.eye-show').style.display = showing ? ''     : 'none';
-      btn.querySelector('.eye-hide').style.display = showing ? 'none' : '';
+      var eyeShow = btn.querySelector('.eye-show');
+      var eyeHide = btn.querySelector('.eye-hide');
+      if (eyeShow) eyeShow.style.display = showing ? '' : 'none';
+      if (eyeHide) eyeHide.style.display = showing ? 'none' : '';
       btn.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
     });
+
+    /* ─── Password Strength & Verification ─── */
+    var suPw1 = document.getElementById('su-pw1');
+    var suPw2 = document.getElementById('su-pw2');
+    var strengthText = document.getElementById('strengthText');
+    var progressBar = document.getElementById('progressBar');
+    var progressWrap = document.querySelector('.progress');
+    var matchStatus = document.getElementById('matchStatus');
+
+    var ruleTests = [
+      function(p) { return p.length >= 8; },
+      function(p) { return /[a-z]/.test(p); },
+      function(p) { return /[A-Z]/.test(p); },
+      function(p) { return /[0-9]/.test(p); },
+      function(p) { return /[^A-Za-z0-9]/.test(p); }
+    ];
+
+    function checkPasswordStrength() {
+      if (!suPw1) return;
+      var val = suPw1.value;
+      if (!val) {
+        if (strengthText) {
+          strengthText.textContent = 'Strength';
+          strengthText.style.color = '#94a3b8';
+        }
+        if (progressBar) {
+          progressBar.style.width = '0%';
+          progressBar.style.background = '#ef4444';
+        }
+        if (progressWrap) progressWrap.classList.remove('strong');
+        checkMatch();
+        return;
+      }
+
+      var passedCount = 0;
+      for (var i = 0; i < ruleTests.length; i++) {
+        if (ruleTests[i](val)) passedCount++;
+      }
+
+      if (progressWrap) progressWrap.classList.remove('strong');
+
+      if (passedCount <= 2) {
+        if (strengthText) { strengthText.textContent = 'Weak'; strengthText.style.color = '#ef4444'; }
+        if (progressBar) { progressBar.style.width = '30%'; progressBar.style.background = '#ef4444'; }
+      } else if (passedCount === 3) {
+        if (strengthText) { strengthText.textContent = 'Medium'; strengthText.style.color = '#f59e0b'; }
+        if (progressBar) { progressBar.style.width = '60%'; progressBar.style.background = '#f59e0b'; }
+      } else if (passedCount === 4) {
+        if (strengthText) { strengthText.textContent = 'Good'; strengthText.style.color = '#38bdf8'; }
+        if (progressBar) { progressBar.style.width = '80%'; progressBar.style.background = '#38bdf8'; }
+      } else {
+        if (strengthText) { strengthText.textContent = 'Strong'; strengthText.style.color = '#22c55e'; }
+        if (progressBar) { progressBar.style.width = '100%'; progressBar.style.background = '#22c55e'; }
+        if (progressWrap) progressWrap.classList.add('strong');
+      }
+
+      checkMatch();
+    }
+
+    function checkMatch() {
+      if (!suPw1 || !suPw2 || !matchStatus) return;
+      var p1 = suPw1.value;
+      var p2 = suPw2.value;
+      if (!p2) {
+        matchStatus.style.display = 'none';
+        return;
+      }
+      matchStatus.style.display = 'flex';
+      if (p1 === p2) {
+        matchStatus.className = 'password-match-status match';
+        matchStatus.innerHTML = '<i class="fa-solid fa-circle-check"></i><span>Passwords match</span>';
+      } else {
+        matchStatus.className = 'password-match-status mismatch';
+        matchStatus.innerHTML = '<i class="fa-solid fa-circle-xmark"></i><span>Passwords do not match</span>';
+      }
+    }
+
+    if (suPw1) suPw1.addEventListener('input', checkPasswordStrength);
+    if (suPw2) suPw2.addEventListener('input', checkMatch);
 
     /* ─── Init: set correct starting state ─── */
     (function init() {
