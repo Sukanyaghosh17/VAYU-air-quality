@@ -106,7 +106,7 @@ import requests
 # ── Constants ─────────────────────────────────────────────────────────────────
 
 DEFAULT_URL = "http://127.0.0.1:8000"
-DEFAULT_SENSORS = 3
+DEFAULT_SENSORS = 5
 DEFAULT_INTERVAL = 3
 DEFAULT_SPIKE_RATE = 0.05
 

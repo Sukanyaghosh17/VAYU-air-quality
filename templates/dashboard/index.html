@@ -70,7 +70,33 @@
 
   <!-- ── Sidebar ─────────────────────────────────────────────── -->
   <aside class="sidebar">
-    <div class="sidebar-section-label">Sensor Stations</div>
+
+    <!-- City quick-select tiles -->
+    <div class="sidebar-section-label">Metro Cities</div>
+    <div class="city-tiles" id="city-tiles">
+      <button class="city-tile" onclick="citySearch('Kolkata')" id="city-tile-kolkata" title="Kolkata, Salt Lake">
+        <span class="city-tile-flag">🟢</span>
+        <span class="city-tile-name">Kolkata</span>
+      </button>
+      <button class="city-tile" onclick="citySearch('Delhi')" id="city-tile-delhi" title="Delhi, Connaught Place">
+        <span class="city-tile-flag">🔵</span>
+        <span class="city-tile-name">Delhi</span>
+      </button>
+      <button class="city-tile" onclick="citySearch('Mumbai')" id="city-tile-mumbai" title="Mumbai, Bandra">
+        <span class="city-tile-flag">🟢</span>
+        <span class="city-tile-name">Mumbai</span>
+      </button>
+      <button class="city-tile" onclick="citySearch('Hyderabad')" id="city-tile-hyderabad" title="Hyderabad, Hitech City">
+        <span class="city-tile-flag">🟡</span>
+        <span class="city-tile-name">Hyderabad</span>
+      </button>
+      <button class="city-tile" onclick="citySearch('Bengaluru')" id="city-tile-bengaluru" title="Bengaluru, Indiranagar">
+        <span class="city-tile-flag">🟢</span>
+        <span class="city-tile-name">Bengaluru</span>
+      </button>
+    </div>
+
+    <div class="sidebar-section-label" style="margin-top:14px">Sensor Stations</div>
     <div id="sensor-list">
       <!-- populated by dashboard.js -->
       <div class="sensor-item">

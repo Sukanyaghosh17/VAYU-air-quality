@@ -154,9 +154,77 @@ function renderSidebar(sensors) {
     </div>`).join('');
 }
 
-window.selectSensor = function(id) {
-  state.selectedSensorId = (state.selectedSensorId === id) ? null : id;
+/**
+ * selectSensor — click handler for sidebar sensor rows.
+ *
+ * BUG (fixed): Previously only toggled state.selectedSensorId and re-rendered
+ * the sidebar highlight, but NEVER re-fetched or re-rendered the stat cards or
+ * charts. So every city showed the same fleet-average numbers.
+ *
+ * Fix: When a sensor is selected, fetch its latest reading from the API,
+ * render its specific stat cards, update the context banner, refresh trend
+ * charts filtered to that sensor, and update the map focus.
+ * De-selecting (clicking active sensor again) reverts to fleet view.
+ */
+window.selectSensor = async function(id) {
+  if (state.selectedSensorId === id) {
+    // De-select → back to fleet view
+    state.selectedSensorId = null;
+    state.currentLocation = '';
+    state.searchMode = 'fleet';
+    renderSidebar(state.sensors);
+    showFleetView();
+    await refreshReadings();
+    await refreshCharts();
+    return;
+  }
+
+  state.selectedSensorId = id;
   renderSidebar(state.sensors);
+
+  // Find the sensor record from the already-loaded list
+  const sensor = state.sensors.find(s => s.id === id);
+
+  // Fetch the latest reading for THIS sensor only
+  try {
+    const data = await API.get(`/api/v1/readings/latest/?sensor=${id}`);
+    const results = Array.isArray(data) ? data : (data.results ?? []);
+    if (results.length) {
+      // Update stat cards with this city's data
+      renderStatCards(results);
+    }
+  } catch (e) {
+    console.warn('[VAYU] Failed to fetch sensor reading:', e);
+  }
+
+  // Update context banner to show city name
+  if (sensor) {
+    const ctx = document.getElementById('location-context');
+    if (ctx) ctx.style.display = 'flex';
+    const ctxText = document.getElementById('location-context-text');
+    if (ctxText) ctxText.textContent = `Showing live data for ${sensor.location}`;
+    const badge = document.getElementById('source-badge');
+    if (badge) {
+      badge.style.display = 'inline-flex';
+      badge.className = 'source-badge source-badge-vayu';
+      badge.textContent = 'VAYU Sensor';
+    }
+    document.getElementById('vayu-dashboard-section').style.display = '';
+    document.getElementById('external-aqi-card').style.display = 'none';
+    document.getElementById('location-empty-state').style.display = 'none';
+    const sensorBadge = document.getElementById('sensor-badge');
+    if (sensorBadge) sensorBadge.textContent = sensor.sensor_code;
+    state.searchMode = 'vayu';
+    state.currentLocation = sensor.location;
+  }
+
+  // Refresh charts for this sensor
+  await refreshCharts();
+
+  // Focus the map on this sensor if map is active
+  if (typeof window.mapFocusVayuSensor === 'function') {
+    window.mapFocusVayuSensor(id);
+  }
 };
 
 /* ── Trend charts ────────────────────────────────────────────── */
@@ -283,7 +351,11 @@ function renderAlertFeed(alerts) {
 /* ── Fetch cycle ─────────────────────────────────────────────── */
 async function refreshReadings() {
   try {
-    const data = await apiGetAll('/api/v1/readings/latest/');
+    // If a specific sensor is selected, only fetch that sensor's reading
+    const url = state.selectedSensorId
+      ? `/api/v1/readings/latest/?sensor=${state.selectedSensorId}`
+      : '/api/v1/readings/latest/';
+    const data = await apiGetAll(url);
     state.latestReadings = data;
     renderStatCards(data);
   } catch (e) { console.warn('Readings refresh failed:', e); }
@@ -332,9 +404,21 @@ function showFleetView() {
   document.getElementById('location-context').style.display = 'none';
   document.getElementById('sensor-badge').textContent = 'Fleet average';
   state.searchMode = 'fleet';
+  if (typeof window.mapClearExternalMarker === 'function') {
+    window.mapClearExternalMarker();
+  }
 }
 
 function showVayuSensorView(results, query) {
+  // ── FIX: update state FIRST, before any async work or DOM ops ──
+  // The polling setInterval reads state.searchMode and state.selectedSensorId.
+  // If we set these at the end (as before), the interval could fire mid-function
+  // and call refreshReadings() with a stale/null selectedSensorId, fetching the
+  // fleet average and overwriting the city-specific cards we're about to render.
+  state.searchMode = 'vayu';
+  state.currentLocation = query;
+  state.selectedSensorId = results[0]?.sensor_id ?? null;
+
   document.getElementById('vayu-dashboard-section').style.display = '';
   document.getElementById('external-aqi-card').style.display = 'none';
   document.getElementById('location-empty-state').style.display = 'none';
@@ -357,14 +441,13 @@ function showVayuSensorView(results, query) {
     pm25: r.pm25, pm10: r.pm10, temperature: r.temperature, humidity: r.humidity
   })));
 
-  // Wire chart to first sensor
-  if (results[0]?.sensor_id) {
-    state.selectedSensorId = results[0].sensor_id;
+  // Refresh charts for the selected sensor (properly awaited via caller)
+  if (state.selectedSensorId) {
     refreshCharts();
+    if (typeof window.mapFocusVayuSensor === 'function') {
+      window.mapFocusVayuSensor(state.selectedSensorId);
+    }
   }
-
-  state.searchMode = 'vayu';
-  state.currentLocation = query;
 }
 
 function showExternalView(result, query) {
@@ -431,6 +514,36 @@ function showEmptyState(query, message) {
 
   state.searchMode = 'empty';
 }
+
+/* ── City quick-select ────────────────────────────────────────── */
+/**
+ * citySearch — called by city tile buttons.
+ * Fills the search bar with the city name, highlights the active tile,
+ * then delegates to the full searchByLocation fallback chain.
+ */
+window.citySearch = async function(city) {
+  // Update search input for visual feedback
+  const inp = document.getElementById('location-input');
+  if (inp) {
+    inp.value = city;
+    const clr = document.getElementById('search-clear-btn');
+    if (clr) clr.style.display = 'flex';
+  }
+
+  // Highlight active city tile
+  document.querySelectorAll('.city-tile').forEach(btn => btn.classList.remove('active'));
+  const tileId = `city-tile-${city.toLowerCase()}`;
+  const tile = document.getElementById(tileId);
+  if (tile) tile.classList.add('active');
+
+  // FIX: Do NOT clear selectedSensorId here before the search.
+  // Setting null here creates a race window: if the 10s polling interval fires
+  // after this line but before showVayuSensorView sets the new sensor ID,
+  // refreshReadings() will fetch fleet average and overwrite the city cards.
+  // Instead, showVayuSensorView now sets state.selectedSensorId FIRST.
+
+  await searchByLocation(city, { force: true });
+};
 
 /* ── Location search & Geolocation ───────────────────────────── */
 let currentSearchAbortController = null;

@@ -173,6 +173,42 @@ body {
 .sensor-loc  { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sensor-count{ font-size: 11px; font-weight: 600; color: var(--teal); }
 
+/* ── City quick-select tiles ────────────────────────────────── */
+.city-tiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 4px 12px 8px;
+}
+.city-tile {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.07);
+  background: rgba(255,255,255,0.03);
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s, color 0.18s;
+  text-align: left;
+}
+.city-tile:hover {
+  background: rgba(255,255,255,0.07);
+  border-color: rgba(255,255,255,0.15);
+  color: var(--text-primary);
+}
+.city-tile.active {
+  background: rgba(44,230,200,0.12);
+  border-color: rgba(44,230,200,0.35);
+  color: var(--teal);
+}
+.city-tile-flag { font-size: 13px; line-height: 1; }
+.city-tile-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
 /* ── Main Content ───────────────────────────────────────────── */
 .main {
   margin-left: var(--sidebar-w);

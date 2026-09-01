@@ -259,7 +259,8 @@ function fitMapBounds() {
 /* ── External (WAQI) marker ─────────────────────────────────────
    Called by dashboard.js after a successful external search.     */
 window.mapDropExternalMarker = function(result, query) {
-  if (!mapState.map) return;    // map not initialised yet — skip
+  mapState.lastExternalResult = { result, query };
+  if (!mapState.map) return;    // map not initialised yet — will be rendered in switchView
 
   // Remove previous external pin if any
   if (mapState.external_marker) {
@@ -276,7 +277,29 @@ window.mapDropExternalMarker = function(result, query) {
     .bindPopup(externalPopupHtml(result, query), { maxWidth: 280, className: 'vayu-popup' })
     .addTo(mapState.map);
 
+  mapState.map.setView([lat, lon], 12);
+  mapState.external_marker.openPopup();
+};
+
+window.mapClearExternalMarker = function() {
+  mapState.lastExternalResult = null;
+  if (mapState.external_marker) {
+    mapState.external_marker.remove();
+    mapState.external_marker = null;
+  }
   fitMapBounds();
+};
+
+window.mapFocusVayuSensor = function(sensorId) {
+  if (!mapState.map || !mapState.sensor_data) return;
+  const match = mapState.sensor_data.find(s => s.id === sensorId);
+  if (!match || match.latitude == null || match.longitude == null) return;
+  mapState.map.setView([match.latitude, match.longitude], 12);
+  const m = mapState.vayu_markers.find(marker => {
+    const ll = marker.getLatLng();
+    return Math.abs(ll.lat - match.latitude) < 0.0001 && Math.abs(ll.lng - match.longitude) < 0.0001;
+  });
+  if (m) m.openPopup();
 };
 
 /* ── "View Details" button from popup ───────────────────────────
@@ -310,7 +333,15 @@ window.switchView = function(mode) {
     }, 50);
 
     // Load (or refresh) sensor data
-    loadAndRenderSensors();
+    loadAndRenderSensors().then(() => {
+      // If an external search result was pending, drop it onto the map now
+      if (mapState.lastExternalResult && !mapState.external_marker) {
+        window.mapDropExternalMarker(
+          mapState.lastExternalResult.result,
+          mapState.lastExternalResult.query
+        );
+      }
+    });
 
     // Start periodic refresh while map is open
     if (!mapState.refresh_timer) {

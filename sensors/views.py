@@ -196,8 +196,13 @@ class SensorReadingViewSet(
             .order_by("-timestamp")
             .values("pk")[:1]
         )
+        sensor_filter = request.query_params.get("sensor")
+        sensor_qs = Sensor.objects.all()
+        if sensor_filter:
+            sensor_qs = sensor_qs.filter(pk=sensor_filter)
+
         pks = (
-            Sensor.objects
+            sensor_qs
             .annotate(latest_pk=Subquery(latest_pk_sq))
             .exclude(latest_pk=None)
             .values_list("latest_pk", flat=True)

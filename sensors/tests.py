@@ -755,3 +755,227 @@ class SensorMapViewTests(APITestCase):
         self.assertIsNone(s2_data["timestamp"])
 
 
+# ── Distinct City Selection Tests ─────────────────────────────────────────────
+
+class DistinctCitySelectionTests(APITestCase):
+    """
+    Confirms that GET /api/v1/readings/latest/?sensor=<id> returns ONLY that
+    sensor's reading, and that 5 metro cities each return unique PM2.5/PM10 values.
+
+    This test catches the regression where selecting any city returned the same
+    fleet-average stats because the endpoint had no ?sensor= filter.
+    """
+
+    LATEST_URL = "/api/v1/readings/latest/"
+
+    def setUp(self):
+        self.user, self.token = make_user("city_test_user")
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.token}")
+
+        # Create 5 sensors with distinct readings
+        cities = [
+            ("SIM-C01", "Kolkata, Salt Lake",       22.5867, 88.4178, 10.0, 20.0),
+            ("SIM-C02", "Delhi, Connaught Place",   28.6315, 77.2167, 55.0, 95.0),
+            ("SIM-C03", "Mumbai, Bandra",           19.0596, 72.8295, 22.0, 48.0),
+            ("SIM-C04", "Hyderabad, Hitech City",   17.4435, 78.3772, 30.0, 65.0),
+            ("SIM-C05", "Bengaluru, Indiranagar",   12.9784, 77.6408, 15.0, 33.0),
+        ]
+        self.sensors = []
+        for code, location, lat, lon, pm25, pm10 in cities:
+            s = Sensor.objects.create(
+                sensor_code=code,
+                location=location,
+                latitude=lat,
+                longitude=lon,
+                status="active",
+                installed_at="2025-01-01",
+            )
+            make_reading(s, pm25=pm25, pm10=pm10, temperature=27.0, humidity=60.0)
+            self.sensors.append((s, pm25, pm10))
+
+    def test_latest_without_filter_returns_all_sensors(self):
+        """Unfiltered /readings/latest/ returns one row per sensor."""
+        resp = self.client.get(self.LATEST_URL)
+        self.assertEqual(resp.status_code, 200)
+        codes = [r["sensor_code"] for r in resp.json()]
+        for sensor, _, _ in self.sensors:
+            self.assertIn(sensor.sensor_code, codes)
+
+    def test_latest_with_sensor_filter_returns_only_that_sensor(self):
+        """?sensor=<id> returns exactly one reading belonging to that sensor."""
+        for sensor, expected_pm25, expected_pm10 in self.sensors:
+            with self.subTest(city=sensor.location):
+                resp = self.client.get(self.LATEST_URL, {"sensor": sensor.id})
+                self.assertEqual(resp.status_code, 200)
+                data = resp.json()
+                self.assertEqual(len(data), 1, f"Expected 1 reading for {sensor.location}, got {len(data)}")
+                row = data[0]
+                self.assertEqual(row["sensor_code"], sensor.sensor_code)
+                self.assertAlmostEqual(float(row["pm25"]), expected_pm25, places=1)
+                self.assertAlmostEqual(float(row["pm10"]), expected_pm10, places=1)
+
+    def test_five_cities_return_distinct_pm25_values(self):
+        """Each city tile click (sensor filter) must yield different PM2.5 numbers."""
+        pm25_values = set()
+        for sensor, expected_pm25, _ in self.sensors:
+            resp = self.client.get(self.LATEST_URL, {"sensor": sensor.id})
+            self.assertEqual(resp.status_code, 200)
+            data = resp.json()
+            self.assertEqual(len(data), 1)
+            pm25_values.add(float(data[0]["pm25"]))
+
+        # All 5 cities must have distinct PM2.5 values
+        self.assertEqual(
+            len(pm25_values), len(self.sensors),
+            f"Expected {len(self.sensors)} distinct PM2.5 values, got {len(pm25_values)}: {pm25_values}"
+        )
+
+    def test_location_search_kolkata_returns_vayu_sensor(self):
+        """Searching 'Kolkata' hits a VAYU sensor, not the WAQI fallback."""
+        resp = self.client.get("/api/v1/sensors/search/", {"location": "Kolkata"})
+        self.assertEqual(resp.status_code, 200)
+        results = resp.json().get("results", [])
+        self.assertTrue(len(results) > 0, "No results for Kolkata")
+        vayu_results = [r for r in results if r["source"] == "vayu_sensor"]
+        self.assertTrue(
+            len(vayu_results) > 0,
+            f"Expected vayu_sensor source for Kolkata, got: {[r['source'] for r in results]}"
+        )
+
+    def test_location_search_delhi_returns_vayu_sensor(self):
+        """Searching 'Delhi' hits a VAYU sensor."""
+        resp = self.client.get("/api/v1/sensors/search/", {"location": "Delhi"})
+        self.assertEqual(resp.status_code, 200)
+        results = resp.json().get("results", [])
+        vayu_results = [r for r in results if r["source"] == "vayu_sensor"]
+        self.assertTrue(len(vayu_results) > 0, "Expected vayu_sensor source for Delhi")
+
+
+# ── Sequential City Tap Tests ─────────────────────────────────────────────────
+
+class SequentialCityTapTests(APITestCase):
+    """
+    Simulates the user tapping city tiles in sequence:
+        Kolkata → Mumbai → Bengaluru → Delhi → Hyderabad
+
+    Regression test for the bug where every city tap after the first returned
+    the SAME data as the first city, because:
+      1. citySearch() cleared state.selectedSensorId = null BEFORE the fetch
+      2. showVayuSensorView set state.searchMode/currentLocation at the END
+      3. The 10s polling interval could fire during either gap and call
+         refreshReadings() with null selectedSensorId, fetching fleet average
+         and overwriting the new city's stat cards.
+
+    This API-level test confirms each sequential search returns a DISTINCT
+    sensor_id and distinct PM2.5 value — the same data the fixed JS would
+    render on each city tap.
+    """
+
+    SEARCH_URL = "/api/v1/sensors/search/"
+    LATEST_URL = "/api/v1/readings/latest/"
+
+    def setUp(self):
+        self.user, self.token = make_user("seq_tap_user")
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.token}")
+
+        # Set up 5 cities with intentionally distinct and non-overlapping PM2.5
+        self.city_sensors = {}
+        cities = [
+            ("SIM-SEQ-01", "Kolkata, Salt Lake",      22.5867, 88.4178,  5.0, 11.0),
+            ("SIM-SEQ-02", "Mumbai, Bandra",          19.0596, 72.8295, 22.0, 44.0),
+            ("SIM-SEQ-03", "Bengaluru, Indiranagar",  12.9784, 77.6408, 14.0, 29.0),
+            ("SIM-SEQ-04", "Delhi, Connaught Place",  28.6315, 77.2167, 60.0, 110.0),
+            ("SIM-SEQ-05", "Hyderabad, Hitech City",  17.4435, 78.3772, 31.0, 63.0),
+        ]
+        for code, location, lat, lon, pm25, pm10 in cities:
+            s = Sensor.objects.create(
+                sensor_code=code,
+                location=location,
+                latitude=lat,
+                longitude=lon,
+                status="active",
+                installed_at="2025-01-01",
+            )
+            make_reading(s, pm25=pm25, pm10=pm10, temperature=27.0, humidity=60.0)
+            city_name = location.split(",")[0]  # e.g. "Kolkata"
+            self.city_sensors[city_name] = {"sensor": s, "pm25": pm25, "pm10": pm10}
+
+    def _search(self, city):
+        """Helper: search for a city and return the first vayu_sensor result."""
+        resp = self.client.get(self.SEARCH_URL, {"location": city})
+        self.assertEqual(resp.status_code, 200, f"Search for {city} failed: {resp.data}")
+        results = resp.json().get("results", [])
+        vayu = [r for r in results if r["source"] == "vayu_sensor"]
+        self.assertTrue(len(vayu) > 0, f"No vayu_sensor result for {city}")
+        return vayu[0]
+
+    def test_sequential_taps_return_distinct_sensor_ids(self):
+        """
+        Tapping Kolkata → Mumbai → Bengaluru → Delhi → Hyderabad must produce
+        5 different sensor_id values, not the same one repeated.
+        """
+        sequence = ["Kolkata", "Mumbai", "Bengaluru", "Delhi", "Hyderabad"]
+        sensor_ids_seen = []
+        for city in sequence:
+            result = self._search(city)
+            sensor_ids_seen.append(result["sensor_id"])
+
+        self.assertEqual(
+            len(set(sensor_ids_seen)), len(sequence),
+            f"Expected {len(sequence)} distinct sensor_ids, got {sensor_ids_seen}"
+        )
+
+    def test_sequential_taps_return_distinct_pm25_values(self):
+        """
+        Each city tap must render city-specific PM2.5, not the same value repeated.
+        """
+        sequence = ["Kolkata", "Mumbai", "Bengaluru", "Delhi", "Hyderabad"]
+        pm25_sequence = []
+        for city in sequence:
+            result = self._search(city)
+            pm25_sequence.append(float(result["pm25"]))
+
+        self.assertEqual(
+            len(set(pm25_sequence)), len(sequence),
+            f"Expected {len(sequence)} distinct PM2.5 values, got {pm25_sequence}"
+        )
+
+    def test_each_city_search_returns_correct_sensor_code(self):
+        """Each city search should return its own SIM-SEQ-xx sensor code."""
+        expected = {
+            "Kolkata":   "SIM-SEQ-01",
+            "Mumbai":    "SIM-SEQ-02",
+            "Bengaluru": "SIM-SEQ-03",
+            "Delhi":     "SIM-SEQ-04",
+            "Hyderabad": "SIM-SEQ-05",
+        }
+        for city, expected_code in expected.items():
+            with self.subTest(city=city):
+                result = self._search(city)
+                self.assertEqual(
+                    result["sensor_code"], expected_code,
+                    f"{city}: expected {expected_code}, got {result['sensor_code']}"
+                )
+
+    def test_latest_endpoint_with_sensor_filter_matches_search_result(self):
+        """
+        The /readings/latest/?sensor=<id> response must return the same PM2.5
+        as the search API — confirming that the sensor filter fix is consistent.
+        """
+        sequence = ["Kolkata", "Mumbai", "Bengaluru", "Delhi", "Hyderabad"]
+        for city in sequence:
+            with self.subTest(city=city):
+                search_result = self._search(city)
+                sensor_id = search_result["sensor_id"]
+                search_pm25 = float(search_result["pm25"])
+
+                latest_resp = self.client.get(self.LATEST_URL, {"sensor": sensor_id})
+                self.assertEqual(latest_resp.status_code, 200)
+                latest_data = latest_resp.json()
+                self.assertEqual(len(latest_data), 1)
+                latest_pm25 = float(latest_data[0]["pm25"])
+
+                self.assertAlmostEqual(
+                    search_pm25, latest_pm25, places=1,
+                    msg=f"{city}: search PM2.5={search_pm25} != latest PM2.5={latest_pm25}"
+                )
