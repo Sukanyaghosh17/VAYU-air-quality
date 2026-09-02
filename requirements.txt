@@ -4,7 +4,11 @@ djangorestframework==3.18.0
 django-environ==0.14.0
 
 # Database
-mysqlclient==2.2.8
+psycopg2-binary>=2.9        # PostgreSQL (Render default database)
+PyMySQL>=1.1.0              # MySQL (pure Python, cross-platform)
+
+# Static files (production)
+whitenoise>=6.8
 
 # Data processing & ML
 pandas>=2.2

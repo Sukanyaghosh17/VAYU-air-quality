@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: vayu-app
+    runtime: python
+    plan: free
+    buildCommand: ./build.sh
+    startCommand: gunicorn vayu.wsgi:application --bind 0.0.0.0:$PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "False"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: vayu-db
+          property: connectionString
+      - key: WAQI_API_TOKEN
+        sync: false
+
+databases:
+  - name: vayu-db
+    databaseName: vayu_db
+    user: vayu_user
+    plan: free
