@@ -1,23 +1,17 @@
 """
-dashboard/views.py — Phase 6 frontend views
-============================================
-All data is fetched client-side by dashboard.js via the DRF API using
-session cookies, so these views only render templates.
+dashboard/views.py — Frontend views
+====================================
+All data is fetched client-side by dashboard.js via the REST API,
+so this view only renders the dashboard template.
 
-  HomeView        — requires login; renders dashboard/index.html
-  CustomLoginView  — styled login page; redirects to "/" on success
-  CustomLogoutView — POST-only; clears session and redirects to /login/
+  HomeView — renders dashboard/index.html (publicly accessible)
 """
-from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.auth.views import LoginView, LogoutView
 from django.views.generic import TemplateView
-from django.urls import reverse_lazy
 
 
-class HomeView(LoginRequiredMixin, TemplateView):
-    """Main dashboard — served to any authenticated user."""
+class HomeView(TemplateView):
+    """Main dashboard — served to all visitors without requiring authentication."""
     template_name = "dashboard/index.html"
-    login_url = "/login/"
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -26,18 +20,3 @@ class HomeView(LoginRequiredMixin, TemplateView):
         ctx["last_location"] = self.request.session.get("last_location", "")
         return ctx
 
-
-class CustomLoginView(LoginView):
-    """Sign-in panel of the combined animated auth experience."""
-    template_name = "registration/auth.html"
-    redirect_authenticated_user = True
-    next_page = reverse_lazy("home")
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["auth_mode"] = "signin"
-        return ctx
-
-
-class CustomLogoutView(LogoutView):
-    next_page = reverse_lazy("login")

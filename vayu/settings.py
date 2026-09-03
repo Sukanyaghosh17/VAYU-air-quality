@@ -156,7 +156,7 @@ REST_FRAMEWORK = {
         "rest_framework.authentication.SessionAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
-        "rest_framework.permissions.IsAuthenticated",
+        "rest_framework.permissions.AllowAny",
     ],
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 50,
@@ -174,11 +174,6 @@ ML_ROLLING_WINDOW = 6
 # ── Alert cooldown ────────────────────────────────────────────────────────────
 # Seconds to wait before creating a second threshold alert for the same sensor/param.
 ALERT_COOLDOWN_SECONDS = 300
-
-# ── Auth redirects (Phase 6 dashboard) ───────────────────────────────────────
-LOGIN_URL = "/login/"
-LOGIN_REDIRECT_URL = "/"
-LOGOUT_REDIRECT_URL = "/login/"
 
 # ── External AQI integration ──────────────────────────────────────────────────
 # World Air Quality Index (WAQI) API token.

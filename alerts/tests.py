@@ -68,9 +68,9 @@ class AlertAPITests(APITestCase):
         resp = self.client.get(self.list_url)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
-    def test_list_unauthenticated_denied(self):
+    def test_list_unauthenticated_allowed(self):
         resp = self.client.get(self.list_url)
-        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
     def test_filter_by_status(self):
         self.auth(self.user_token)

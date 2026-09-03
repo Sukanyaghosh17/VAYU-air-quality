@@ -21,7 +21,7 @@ ThresholdViewSet:
 """
 
 from rest_framework import mixins, viewsets
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 
 from sensors.permissions import IsAdminOrReadOnly
 
@@ -36,8 +36,8 @@ class AlertViewSet(
     viewsets.GenericViewSet,
 ):
     """
-    list     GET  /alerts/          any auth user
-    retrieve GET  /alerts/<pk>/     any auth user
+    list     GET  /alerts/          open to all
+    retrieve GET  /alerts/<pk>/     open to all
     partial  PATCH /alerts/<pk>/    admin only — status field only
     """
 
@@ -46,12 +46,12 @@ class AlertViewSet(
 
     def get_permissions(self):
         """
-        list / retrieve → any authenticated user.
+        list / retrieve → open to all.
         partial_update  → admin only.
         """
         if self.action == "partial_update":
             return [IsAdminOrReadOnly()]
-        return [IsAuthenticated()]
+        return [AllowAny()]
 
     def get_queryset(self):
         qs = Alert.objects.select_related("sensor", "reading").order_by("-created_at")

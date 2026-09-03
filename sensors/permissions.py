@@ -24,17 +24,16 @@ from rest_framework.permissions import BasePermission
 
 class IsAdminOrReadOnly(BasePermission):
     """
-    Safe methods: any authenticated user.
+    Safe methods (GET, HEAD, OPTIONS): open to everyone.
     Unsafe methods: admin role only (user.is_admin() == True).
     """
 
     def has_permission(self, request, view):
-        if not (request.user and request.user.is_authenticated):
-            return False
         # SAFE_METHODS = ('GET', 'HEAD', 'OPTIONS')
         if request.method in ("GET", "HEAD", "OPTIONS"):
             return True
-        return bool(request.user.is_admin())
+        return bool(request.user and request.user.is_authenticated and request.user.is_admin())
+
 
 
 class IsAuthenticatedReadOrCreate(BasePermission):

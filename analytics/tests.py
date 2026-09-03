@@ -82,9 +82,9 @@ class StatsViewTests(APITestCase):
         resp = self.client.get(self.url)
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_stats_unauthenticated_denied(self):
+    def test_stats_unauthenticated_allowed(self):
         resp = self.client.get(self.url, {"sensor": self.sensor.pk})
-        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
     def test_stats_response_is_flat_dict(self):
         """stats/ must return a plain dict, NOT a paginated envelope."""
@@ -129,9 +129,9 @@ class AnomalyFeedTests(APITestCase):
         self.assertEqual(resp.data["count"], 1)
         self.assertEqual(resp.data["results"][0]["sensor_code"], self.sensor.sensor_code)
 
-    def test_unauthenticated_denied(self):
+    def test_unauthenticated_allowed(self):
         resp = self.client.get(self.url)
-        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
 
 # ── TrendView tests ───────────────────────────────────────────────────────────
@@ -178,9 +178,9 @@ class TrendViewTests(APITestCase):
         resp = self.client.get(self.url, {"param": "pm25", "range": "99y"})
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_unauthenticated_denied(self):
+    def test_unauthenticated_allowed(self):
         resp = self.client.get(self.url, {"param": "pm25", "range": "7d"})
-        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
 
 # ── Phase 5: ML anomaly detection tests ──────────────────────────────────────

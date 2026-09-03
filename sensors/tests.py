@@ -67,9 +67,9 @@ class SensorAPITests(APITestCase):
         resp = self.client.get(self.list_url)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
-    def test_list_unauthenticated_denied(self):
+    def test_list_unauthenticated_allowed(self):
         resp = self.client.get(self.list_url)
-        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
     def test_create_as_admin(self):
         self.auth(self.admin_token)
@@ -135,7 +135,7 @@ class SensorReadingAPITests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
         self.assertEqual(resp.data["sensor_code"], self.sensor.sensor_code)
 
-    def test_create_unauthenticated_denied(self):
+    def test_create_unauthenticated_allowed(self):
         payload = {
             "sensor": self.sensor.pk,
             "pm25": 12.5,
@@ -144,7 +144,7 @@ class SensorReadingAPITests(APITestCase):
             "humidity": 60.0,
         }
         resp = self.client.post(self.list_url, payload, format="json")
-        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
 
     def test_list_returns_200(self):
         make_reading(self.sensor)
@@ -325,11 +325,11 @@ class LocationSearchInternalTests(APITestCase):
         resp = self.client.get(SEARCH_URL)
         self.assertEqual(resp.status_code, 400)
 
-    def test_unauthenticated_returns_401(self):
-        """Unauthenticated request yields 401."""
+    def test_unauthenticated_returns_200(self):
+        """Unauthenticated request is allowed and yields 200."""
         self.client.credentials()
         resp = self.client.get(SEARCH_URL, {"location": "Kolkata"})
-        self.assertEqual(resp.status_code, 401)
+        self.assertEqual(resp.status_code, 200)
 
     def test_session_stores_last_location(self):
         """Successful search stores location in session."""
@@ -711,10 +711,10 @@ class SensorMapViewTests(APITestCase):
         )
         make_reading(self.s3, pm25=20.0, pm10=40.0)
 
-    def test_unauthenticated_request_rejected(self):
-        """GET /api/v1/sensors/map/ requires authentication."""
+    def test_unauthenticated_request_allowed(self):
+        """GET /api/v1/sensors/map/ is publicly accessible."""
         resp = self.client.get(self.url)
-        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
     def test_returns_correct_shape_and_excludes_null_coordinates(self):
         """Returns only geocoded sensors, with latest reading and computed AQI."""

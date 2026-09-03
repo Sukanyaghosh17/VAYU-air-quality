@@ -33,7 +33,7 @@ from django.utils import timezone
 
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -93,13 +93,7 @@ class SensorReadingViewSet(
     """
 
     serializer_class = SensorReadingSerializer
-    # IsAuthenticated (not IsAuthenticatedReadOrCreate) is correct here.
-    # Immutability is enforced at the routing layer: no UpdateModelMixin means
-    # the router never registers PUT/PATCH/DELETE routes, so the router itself
-    # returns 405 before any permission check for those methods.
-    # If we used IsAuthenticatedReadOrCreate, DRF's permission check would
-    # run first and return 403 for PUT — masking the real reason (no route).
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
     def get_queryset(self):
         qs = SensorReading.objects.select_related("sensor").order_by("-timestamp")
@@ -315,7 +309,7 @@ class LocationSearchView(APIView):
     Authentication: same as all sensor endpoints — IsAuthenticated.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
     def get(self, request):
         lat_param = request.query_params.get("lat") or request.query_params.get("latitude")
@@ -502,7 +496,7 @@ class SensorMapView(APIView):
     Requires authentication (IsAuthenticated). Read-only endpoint.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
     def get(self, request):
         # Only sensors that have geocoordinates set

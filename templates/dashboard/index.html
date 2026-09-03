@@ -53,18 +53,6 @@
         <div class="pulse-dot"></div>
         Live · updated <span id="last-updated">—</span>
       </div>
-
-      <div class="user-chip">
-        <div class="user-avatar">{{ request.user.username|first|upper }}</div>
-        <span class="user-name">{{ request.user.username }}</span>
-      </div>
-
-      <div class="btn-logout">
-        <form method="post" action="{% url 'logout' %}">
-          {% csrf_token %}
-          <button type="submit" id="logout-btn">⎋ Logout</button>
-        </form>
-      </div>
     </div>
   </nav>
 

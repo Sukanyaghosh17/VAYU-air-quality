@@ -27,7 +27,7 @@ from django.db.models.functions import TruncDay, TruncHour
 from django.utils import timezone
 
 from rest_framework import generics, status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -51,7 +51,7 @@ class SensorStatsView(APIView):
     400 if ?sensor= is missing.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
     def get(self, request):
         sensor_id = request.query_params.get("sensor")
@@ -111,7 +111,7 @@ class AnomalyFeedView(generics.ListAPIView):
     """
 
     serializer_class = AnomalyAlertSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
     def get_queryset(self):
         qs = (
@@ -147,7 +147,7 @@ class TrendView(APIView):
     400 if ?range= is invalid.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
     def get(self, request):
         param = request.query_params.get("param")
