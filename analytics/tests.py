@@ -307,10 +307,10 @@ class MLTrainAndScoreTests(TestCase):
         train_sensor_model(self.sensor.id, readings)
 
         normal = _make_ml_reading(self.sensor, pm25=12.0)
-        spike  = _make_ml_reading(self.sensor, pm25=500.0, pm10=600.0)
-
         _, score_normal = score_reading(normal)
-        _, score_spike  = score_reading(spike)
+
+        spike = _make_ml_reading(self.sensor, pm25=500.0, pm10=600.0)
+        _, score_spike = score_reading(spike)
 
         self.assertLess(score_spike, score_normal,
                         "Spike reading should be more anomalous (lower score)")
@@ -384,6 +384,7 @@ class MLModelCachingTests(TestCase):
         self.sensor = _make_ml_sensor("SEN-CACHE01")
         self.tmp = tempfile.mkdtemp()
 
+    @override_settings()
     def test_model_loaded_from_cache_on_subsequent_calls(self):
         from unittest.mock import patch
         import joblib
@@ -399,7 +400,8 @@ class MLModelCachingTests(TestCase):
 
         # Clear cache to simulate a fresh process state with model on disk
         clear_model_cache()
-        self.assertNotIn(self.sensor.id, _MODEL_CACHE)
+        from analytics.ml import get_model_path
+        self.assertNotIn(str(get_model_path(self.sensor.id)), _MODEL_CACHE)
 
         reading = _make_ml_reading(self.sensor, pm25=15.0)
 
@@ -417,4 +419,51 @@ class MLModelCachingTests(TestCase):
         with patch("joblib.load", wraps=joblib.load) as mock_load:
             score_reading(reading)
             self.assertEqual(mock_load.call_count, 0)
+
+    @override_settings()
+    def test_cache_keys_on_resolved_model_path_not_sensor_id(self):
+        """
+        Regression test: When settings.ML_MODELS_DIR changes, a model for the
+        same sensor_id in a new directory must not collide with or serve stale
+        cached models from the old directory.
+        """
+        from analytics.ml import clear_model_cache, get_model_path, score_reading, train_sensor_model
+        from django.conf import settings
+
+        clear_model_cache()
+
+        tmp_a = tempfile.mkdtemp()
+        tmp_b = tempfile.mkdtemp()
+
+        # Step 1: Train model A under tmp_a with normal readings (pm25 ~ 15.0)
+        settings.ML_MODELS_DIR = tmp_a
+        settings.ML_ROLLING_WINDOW = 6
+
+        _bulk_readings(self.sensor, n=120, pm25_base=15.0)
+        readings_a = SensorReading.objects.filter(sensor=self.sensor).order_by("timestamp")
+        path_a = train_sensor_model(self.sensor.id, readings_a)
+        self.assertEqual(path_a, get_model_path(self.sensor.id))
+
+        # Score a reading under tmp_a (populates cache for path_a)
+        reading_test = _make_ml_reading(self.sensor, pm25=15.0)
+        _, score_a = score_reading(reading_test)
+
+        # Step 2: Switch to tmp_b and train a DIFFERENT model for the SAME sensor_id
+        settings.ML_MODELS_DIR = tmp_b
+        # Clean out old readings from DB and seed new readings with extreme baseline (pm25 ~ 400.0)
+        SensorReading.objects.filter(sensor=self.sensor).delete()
+        _bulk_readings(self.sensor, n=120, pm25_base=400.0)
+        readings_b = SensorReading.objects.filter(sensor=self.sensor).order_by("timestamp")
+        path_b = train_sensor_model(self.sensor.id, readings_b)
+        self.assertEqual(path_b, get_model_path(self.sensor.id))
+        self.assertNotEqual(str(path_a), str(path_b))
+
+        # Step 3: Score reading_test under tmp_b without calling clear_model_cache()
+        # Must reflect the new model trained in tmp_b, NOT the cached model from tmp_a
+        _, score_b = score_reading(reading_test)
+        self.assertNotEqual(
+            score_a,
+            score_b,
+            "score_reading should reflect the model from tmp_b, not the stale cached model from tmp_a",
+        )
 

@@ -64,9 +64,9 @@ def get_model_path(sensor_id: int) -> Path:
 
 
 # Process-local cache for loaded Isolation Forest models:
-# Key: sensor_id (int)
+# Key: resolved model_path string (str)
 # Value: (mtime: float, model: object)
-_MODEL_CACHE: dict[int, tuple[float, object]] = {}
+_MODEL_CACHE: dict[str, tuple[float, object]] = {}
 
 
 def load_sensor_model(sensor_id: int):
@@ -76,18 +76,19 @@ def load_sensor_model(sensor_id: int):
     Returns None if no model file exists.
     """
     model_path = get_model_path(sensor_id)
+    cache_key = str(model_path)
     if not model_path.exists():
-        _MODEL_CACHE.pop(sensor_id, None)
+        _MODEL_CACHE.pop(cache_key, None)
         return None
 
     mtime = model_path.stat().st_mtime
-    if sensor_id in _MODEL_CACHE:
-        cached_mtime, cached_model = _MODEL_CACHE[sensor_id]
+    if cache_key in _MODEL_CACHE:
+        cached_mtime, cached_model = _MODEL_CACHE[cache_key]
         if cached_mtime == mtime:
             return cached_model
 
     model = joblib.load(model_path)
-    _MODEL_CACHE[sensor_id] = (mtime, model)
+    _MODEL_CACHE[cache_key] = (mtime, model)
     return model
 
 
@@ -164,7 +165,7 @@ def train_sensor_model(sensor_id: int, readings) -> Path:
     model_path = get_model_path(sensor_id)
     model_path.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(model, model_path)
-    _MODEL_CACHE[sensor_id] = (model_path.stat().st_mtime, model)
+    _MODEL_CACHE[str(model_path)] = (model_path.stat().st_mtime, model)
     logger.info(
         "ML model trained for sensor %d (%d readings) → %s",
         sensor_id, len(reading_list), model_path,
