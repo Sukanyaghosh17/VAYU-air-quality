@@ -24,16 +24,18 @@ from django.db import models
 class User(AbstractUser):
     ROLE_ADMIN = "admin"
     ROLE_USER = "user"
+    ROLE_SERVICE = "service"
     ROLE_CHOICES = [
         (ROLE_ADMIN, "Admin"),
         (ROLE_USER, "User"),
+        (ROLE_SERVICE, "Service"),
     ]
 
     role = models.CharField(
         max_length=10,
         choices=ROLE_CHOICES,
         default=ROLE_USER,
-        help_text="Admins can manage sensors, thresholds, and resolve alerts.",
+        help_text="Admins manage system, users view, service accounts ingest telemetry.",
     )
 
     class Meta:
@@ -43,6 +45,15 @@ class User(AbstractUser):
     def is_admin(self) -> bool:
         """Convenience predicate used in DRF permission classes."""
         return self.role == self.ROLE_ADMIN
+
+    def is_service(self) -> bool:
+        """Predicate for automated service accounts (e.g. simulator)."""
+        return self.role == self.ROLE_SERVICE
+
+    @property
+    def can_provision_sensors(self) -> bool:
+        """Check if user has permission to register/create new sensors."""
+        return self.is_admin() or self.is_service()
 
     def __str__(self) -> str:
         return f"{self.username} ({self.get_role_display()})"

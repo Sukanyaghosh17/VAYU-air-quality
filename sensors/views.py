@@ -43,6 +43,7 @@ from .geocoding import geocode
 from .models import Sensor, SensorReading
 from .permissions import (
     AllowAnyReadRequireAuthCreate,
+    CanCreateSensor,
     IsAdminOrReadOnly,
 )
 from .serializers import SensorReadingSerializer, SensorSerializer
@@ -51,12 +52,18 @@ from .serializers import SensorReadingSerializer, SensorSerializer
 class SensorViewSet(viewsets.ModelViewSet):
     """
     CRUD for Sensor objects.
-    Write operations (POST/PUT/PATCH/DELETE) require admin role.
-    Read operations are open to any authenticated user.
+    Sensor creation (POST) allows admins and authorized service accounts.
+    Other write operations (PUT/PATCH/DELETE) require admin role.
+    Read operations are open to anyone.
     """
 
     serializer_class = SensorSerializer
     permission_classes = [IsAdminOrReadOnly]
+
+    def get_permissions(self):
+        if self.action == "create":
+            return [CanCreateSensor()]
+        return [IsAdminOrReadOnly()]
 
     def get_queryset(self):
         return (

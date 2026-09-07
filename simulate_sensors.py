@@ -50,19 +50,9 @@ Spikes are injected independently per parameter so mixed anomalies
 
 Authentication
 --------------
-Uses DRF Token auth.  Set up the simulator user once:
+Uses DRF Token auth. Provision the simulator service account and token:
 
-    python manage.py shell -c "
-    import environ; from pathlib import Path
-    from django.contrib.auth import get_user_model
-    from rest_framework.authtoken.models import Token
-    env = environ.Env(); environ.Env.read_env(Path('.env'))
-    User = get_user_model()
-    u, _ = User.objects.get_or_create(username='simulator', defaults={'role': 'user'})
-    u.set_password(env('SIMULATOR_PASSWORD')); u.save()
-    t, _ = Token.objects.get_or_create(user=u)
-    print('Token:', t.key)
-    "
+    python manage.py bootstrap_demo
 
 Then set SIMULATOR_TOKEN=<key> in .env or pass --token <key>.
 """

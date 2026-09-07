@@ -21,6 +21,29 @@ AllowAnyReadRequireAuthCreate
 from rest_framework.permissions import BasePermission
 
 
+class CanCreateSensor(BasePermission):
+    """
+    Allows sensor creation (POST) to admin users and authorized service accounts.
+    Safe methods (GET, HEAD, OPTIONS) are open to everyone.
+    Applied specifically to SensorViewSet's create action so service accounts
+    cannot perform other administrative mutations (PUT/PATCH/DELETE) or access
+    admin-only alert/threshold endpoints.
+    """
+
+    def has_permission(self, request, view):
+        if request.method in ("GET", "HEAD", "OPTIONS"):
+            return True
+        user = request.user
+        if not (user and user.is_authenticated):
+            return False
+        return bool(
+            getattr(user, "can_provision_sensors", False)
+            or (callable(getattr(user, "is_admin", None)) and user.is_admin())
+            or (callable(getattr(user, "is_service", None)) and user.is_service())
+            or getattr(user, "role", "") in ("admin", "service")
+        )
+
+
 class IsAdminOrReadOnly(BasePermission):
     """
     Safe methods (GET, HEAD, OPTIONS): open to everyone.
