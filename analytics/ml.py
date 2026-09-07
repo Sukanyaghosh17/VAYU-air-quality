@@ -63,6 +63,39 @@ def get_model_path(sensor_id: int) -> Path:
     return Path(settings.ML_MODELS_DIR) / f"sensor_{sensor_id}.joblib"
 
 
+# Process-local cache for loaded Isolation Forest models:
+# Key: sensor_id (int)
+# Value: (mtime: float, model: object)
+_MODEL_CACHE: dict[int, tuple[float, object]] = {}
+
+
+def load_sensor_model(sensor_id: int):
+    """
+    Load the Isolation Forest model for a sensor from disk with in-memory caching.
+    Uses file mtime to automatically reload if the model was retrained on disk.
+    Returns None if no model file exists.
+    """
+    model_path = get_model_path(sensor_id)
+    if not model_path.exists():
+        _MODEL_CACHE.pop(sensor_id, None)
+        return None
+
+    mtime = model_path.stat().st_mtime
+    if sensor_id in _MODEL_CACHE:
+        cached_mtime, cached_model = _MODEL_CACHE[sensor_id]
+        if cached_mtime == mtime:
+            return cached_model
+
+    model = joblib.load(model_path)
+    _MODEL_CACHE[sensor_id] = (mtime, model)
+    return model
+
+
+def clear_model_cache():
+    """Clear the process-local in-memory model cache."""
+    _MODEL_CACHE.clear()
+
+
 def _rolling_means(readings: list, window: int) -> list[float]:
     """
     Compute per-feature rolling means from a list of SensorReading objects.
@@ -131,6 +164,7 @@ def train_sensor_model(sensor_id: int, readings) -> Path:
     model_path = get_model_path(sensor_id)
     model_path.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(model, model_path)
+    _MODEL_CACHE[sensor_id] = (model_path.stat().st_mtime, model)
     logger.info(
         "ML model trained for sensor %d (%d readings) → %s",
         sensor_id, len(reading_list), model_path,
@@ -156,12 +190,10 @@ def score_reading(reading) -> tuple[bool, float]:
     Returns (False, 0.0) immediately.  This is the correct no-op behaviour
     before `train_ml` has been run for this sensor.
     """
-    model_path = get_model_path(reading.sensor_id)
-    if not model_path.exists():
+    model = load_sensor_model(reading.sensor_id)
+    if model is None:
         logger.debug("No ML model for sensor %d — skipping scoring.", reading.sensor_id)
         return False, 0.0
-
-    model = joblib.load(model_path)
 
     # Fetch recent readings for rolling context (exclude the current reading)
     from sensors.models import SensorReading  # local to avoid circular import

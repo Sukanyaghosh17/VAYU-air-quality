@@ -375,3 +375,46 @@ class MLManagementCommandTests(TestCase):
         saved = list(Path(self.tmp).glob("*.joblib"))
         self.assertEqual(len(saved), 1)
         self.assertIn(f"sensor_{self.sensor.id}", saved[0].name)
+
+
+class MLModelCachingTests(TestCase):
+    """Verifies that Isolation Forest models are cached in memory and reloaded on mtime change."""
+
+    def setUp(self):
+        self.sensor = _make_ml_sensor("SEN-CACHE01")
+        self.tmp = tempfile.mkdtemp()
+
+    def test_model_loaded_from_cache_on_subsequent_calls(self):
+        from unittest.mock import patch
+        import joblib
+        from analytics.ml import clear_model_cache, train_sensor_model, score_reading, _MODEL_CACHE
+        from django.conf import settings
+
+        settings.ML_MODELS_DIR = self.tmp
+        clear_model_cache()
+
+        _bulk_readings(self.sensor, n=120)
+        readings = SensorReading.objects.filter(sensor=self.sensor).order_by("timestamp")
+        train_sensor_model(self.sensor.id, readings)
+
+        # Clear cache to simulate a fresh process state with model on disk
+        clear_model_cache()
+        self.assertNotIn(self.sensor.id, _MODEL_CACHE)
+
+        reading = _make_ml_reading(self.sensor, pm25=15.0)
+
+        # First score_reading should call joblib.load
+        with patch("joblib.load", wraps=joblib.load) as mock_load:
+            score_reading(reading)
+            self.assertEqual(mock_load.call_count, 1)
+
+            # Second score_reading should hit cache without calling joblib.load again
+            score_reading(reading)
+            self.assertEqual(mock_load.call_count, 1)
+
+        # If model is retrained, cache is updated/invalidated
+        train_sensor_model(self.sensor.id, readings)
+        with patch("joblib.load", wraps=joblib.load) as mock_load:
+            score_reading(reading)
+            self.assertEqual(mock_load.call_count, 0)
+
