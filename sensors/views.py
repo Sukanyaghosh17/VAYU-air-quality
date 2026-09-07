@@ -44,7 +44,6 @@ from .models import Sensor, SensorReading
 from .permissions import (
     AllowAnyReadRequireAuthCreate,
     IsAdminOrReadOnly,
-    IsAuthenticatedReadOrCreate,
 )
 from .serializers import SensorReadingSerializer, SensorSerializer
 
