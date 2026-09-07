@@ -1,0 +1,25 @@
+target-version = "py312"
+line-length = 120
+exclude = [
+    ".git",
+    ".venv",
+    "venv",
+    "migrations",
+    "staticfiles",
+    "static",
+    "ml_models",
+    "scratch",
+]
+
+[lint]
+select = [
+    "E9",
+    "F",
+]
+ignore = [
+    "F401",  # unused imports
+    "F403",  # star imports
+    "F405",  # undefined star import names
+    "F541",  # f-string without placeholders
+    "F811",  # redefinition of unused names
+]
