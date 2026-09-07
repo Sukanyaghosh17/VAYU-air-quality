@@ -8,33 +8,89 @@ Provisions:
   2. A DRF auth Token for the simulator user (printed as SIMULATOR_TOKEN=<key>).
   3. Pre-creates 5 demo sensors directly via the ORM using preset Indian city coordinates
      so the dashboard displays sensors immediately upon deployment.
+  4. Seeds 48 hours of realistic demo readings (one per hour per sensor) so that the
+     fleet view and trend charts are populated on first deploy without needing the
+     external simulator to run first.
 
 Idempotency:
   Safe to run repeatedly during deployment (e.g. in build.sh). Existing records
-  are updated/preserved without duplication.
+  are updated/preserved without duplication.  Readings are only seeded when a
+  sensor has fewer than MIN_DEMO_READINGS rows, so repeated deploys do not
+  create duplicate data.
 """
 
+import math
 import os
+import random
 import secrets
+from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from rest_framework.authtoken.models import Token
 
-from sensors.models import Sensor
+from sensors.models import Sensor, SensorReading
 
 DEMO_LOCATIONS = [
-    ("Kolkata Park Street", 22.5535, 88.3519),
-    ("Delhi Connaught Place", 28.6315, 77.2167),
-    ("Mumbai Bandra", 19.0596, 72.8295),
-    ("Bengaluru Indiranagar", 12.9784, 77.6408),
-    ("Hyderabad Hitech City", 17.4435, 78.3772),
+    ("Kolkata Park Street",     22.5535, 88.3519),
+    ("Delhi Connaught Place",   28.6315, 77.2167),
+    ("Mumbai Bandra",           19.0596, 72.8295),
+    ("Bengaluru Indiranagar",   12.9784, 77.6408),
+    ("Hyderabad Hitech City",   17.4435, 78.3772),
 ]
+
+# Realistic baseline AQI values per city (µg/m³)
+_CITY_BASELINES = {
+    "Kolkata Park Street":    {"pm25": 65.0, "pm10": 110.0, "temperature": 30.0, "humidity": 72.0},
+    "Delhi Connaught Place":  {"pm25": 90.0, "pm10": 150.0, "temperature": 32.0, "humidity": 55.0},
+    "Mumbai Bandra":          {"pm25": 45.0, "pm10": 80.0,  "temperature": 29.0, "humidity": 78.0},
+    "Bengaluru Indiranagar":  {"pm25": 35.0, "pm10": 65.0,  "temperature": 25.0, "humidity": 60.0},
+    "Hyderabad Hitech City":  {"pm25": 50.0, "pm10": 90.0,  "temperature": 31.0, "humidity": 52.0},
+}
+
+# Seed 48 hourly readings; only insert when sensor has fewer than this many rows
+MIN_DEMO_READINGS = 24
+
+
+def _noisy(base: float, pct: float = 0.15) -> float:
+    """Return base ± pct*base with a sinusoidal time-of-day modulation."""
+    return max(0.0, base * (1.0 + random.uniform(-pct, pct)))
+
+
+def _seed_readings(sensor: Sensor, num_hours: int = 48) -> int:
+    """
+    Insert `num_hours` hourly SensorReading rows for `sensor` going back
+    from now.  Each reading uses a realistic sinusoidal diurnal pattern.
+    Returns the number of rows created.
+    """
+    baselines = _CITY_BASELINES.get(sensor.location, {
+        "pm25": 50.0, "pm10": 90.0, "temperature": 28.0, "humidity": 65.0,
+    })
+
+    now = timezone.now().replace(minute=0, second=0, microsecond=0)
+    readings = []
+    for h in range(num_hours, 0, -1):
+        ts = now - timedelta(hours=h)
+        # Diurnal modulation: peak pollution at rush hours (8 am, 6 pm)
+        hour_of_day = ts.hour
+        diurnal = 1.0 + 0.25 * math.sin(math.radians((hour_of_day - 8) * 15))
+
+        readings.append(SensorReading(
+            sensor=sensor,
+            pm25=round(_noisy(baselines["pm25"] * diurnal), 2),
+            pm10=round(_noisy(baselines["pm10"] * diurnal), 2),
+            temperature=round(_noisy(baselines["temperature"], pct=0.05), 2),
+            humidity=round(_noisy(baselines["humidity"], pct=0.08), 2),
+            timestamp=ts,
+        ))
+
+    SensorReading.objects.bulk_create(readings, ignore_conflicts=True)
+    return len(readings)
 
 
 class Command(BaseCommand):
-    help = "Idempotently provision the simulator service account, DRF auth token, and demo sensors."
+    help = "Idempotently provision the simulator service account, DRF auth token, demo sensors, and seed demo readings."
 
     def handle(self, *args, **options):
         User = get_user_model()
@@ -73,6 +129,7 @@ class Command(BaseCommand):
         existing_count = 0
         today = timezone.now().date()
 
+        sensors = []
         for idx, (loc, lat, lon) in enumerate(DEMO_LOCATIONS, start=1):
             code = f"SIM-{idx:03d}"
             sensor, s_created = Sensor.objects.get_or_create(
@@ -85,6 +142,7 @@ class Command(BaseCommand):
                     "installed_at": today,
                 },
             )
+            sensors.append(sensor)
             if s_created:
                 created_count += 1
             else:
@@ -92,7 +150,31 @@ class Command(BaseCommand):
 
         self.stdout.write(
             self.style.SUCCESS(
-                f"[bootstrap_demo] Completed: {created_count} sensors created, "
-                f"{existing_count} existing sensors preserved."
+                f"[bootstrap_demo] Sensors: {created_count} created, "
+                f"{existing_count} existing preserved."
             )
         )
+
+        # 4. Seed demo readings for any sensor that lacks sufficient data
+        total_seeded = 0
+        for sensor in sensors:
+            current_count = SensorReading.objects.filter(sensor=sensor).count()
+            if current_count < MIN_DEMO_READINGS:
+                seeded = _seed_readings(sensor, num_hours=48)
+                total_seeded += seeded
+                self.stdout.write(
+                    f"  Seeded {seeded} hourly readings for {sensor.sensor_code} ({sensor.location})"
+                )
+            else:
+                self.stdout.write(
+                    f"  {sensor.sensor_code} already has {current_count} readings — skipping seed."
+                )
+
+        if total_seeded:
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"[bootstrap_demo] Seeded {total_seeded} demo readings total."
+                )
+            )
+        else:
+            self.stdout.write("[bootstrap_demo] All sensors have sufficient readings.")
