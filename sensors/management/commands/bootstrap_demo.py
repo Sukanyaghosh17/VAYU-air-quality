@@ -97,10 +97,19 @@ def _seed_readings(sensor: Sensor, num_hours: int = 48) -> int:
         if h == 1:
             diurnal = max(diurnal, 1.0)   # never dip below the raw baseline
 
+        pm25_val = round(_noisy(baselines["pm25"] * diurnal), 2)
+        pm10_val = round(_noisy(baselines["pm10"] * diurnal), 2)
+
+        # Hard floor: never let the reading drop below 60% of the city baseline.
+        # This prevents edge cases (deep diurnal trough + negative noise) from
+        # producing sub-realistic PM values that map to AQI < 50 for all cities.
+        pm25_floor = baselines["pm25"] * 0.60
+        pm10_floor = baselines["pm10"] * 0.60
+
         readings.append(SensorReading(
             sensor=sensor,
-            pm25=round(_noisy(baselines["pm25"] * diurnal), 2),
-            pm10=round(_noisy(baselines["pm10"] * diurnal), 2),
+            pm25=max(pm25_val, pm25_floor),
+            pm10=max(pm10_val, pm10_floor),
             temperature=round(_noisy(baselines["temperature"], pct=0.05), 2),
             humidity=round(_noisy(baselines["humidity"], pct=0.08), 2),
             timestamp=ts,
