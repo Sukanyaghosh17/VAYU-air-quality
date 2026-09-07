@@ -50,7 +50,12 @@ _CITY_BASELINES = {
 }
 
 # Seed 48 hourly readings; only insert when sensor has fewer than this many rows
-MIN_DEMO_READINGS = 24
+MIN_DEMO_READINGS = 36
+
+# IST is UTC+5:30; we use +5.5 hours offset when converting UTC timestamps to local
+# hour-of-day for the diurnal modulation so that readings look realistic
+# regardless of what UTC time the deployment runs.
+_IST_OFFSET_HOURS = 5.5
 
 
 def _noisy(base: float, pct: float = 0.15) -> float:
@@ -61,7 +66,13 @@ def _noisy(base: float, pct: float = 0.15) -> float:
 def _seed_readings(sensor: Sensor, num_hours: int = 48) -> int:
     """
     Insert `num_hours` hourly SensorReading rows for `sensor` going back
-    from now.  Each reading uses a realistic sinusoidal diurnal pattern.
+    from now.  Each reading uses a realistic sinusoidal diurnal pattern in
+    IST local time (UTC+5:30) so the modulation looks correct regardless of
+    the UTC time of deployment.
+
+    The most recent reading (h=1) is always pinned near the city baseline
+    (without diurnal dampening) to guarantee a meaningful AQI in the fleet view.
+
     Returns the number of rows created.
     """
     baselines = _CITY_BASELINES.get(sensor.location, {
@@ -72,9 +83,19 @@ def _seed_readings(sensor: Sensor, num_hours: int = 48) -> int:
     readings = []
     for h in range(num_hours, 0, -1):
         ts = now - timedelta(hours=h)
-        # Diurnal modulation: peak pollution at rush hours (8 am, 6 pm)
-        hour_of_day = ts.hour
-        diurnal = 1.0 + 0.25 * math.sin(math.radians((hour_of_day - 8) * 15))
+        # Convert UTC timestamp to approximate IST hour for the diurnal curve
+        ist_hour = (ts.hour + _IST_OFFSET_HOURS) % 24
+        # Diurnal modulation: peak pollution at rush hours (8 am, 6 pm IST)
+        # Uses a positive-biased sine so the minimum (at 2am IST) is ~0.75×
+        # and the maximum (at 2pm IST) is ~1.25× the baseline.
+        diurnal = 1.0 + 0.25 * math.sin(math.radians((ist_hour - 8) * 15))
+
+        # Pin the most recent reading to a well-above-zero baseline
+        # (diurnal minimum at ~2 AM IST = 0.75×) so the fleet view never
+        # shows an unrealistically low AQI from a deployment that ran at
+        # midnight IST.
+        if h == 1:
+            diurnal = max(diurnal, 1.0)   # never dip below the raw baseline
 
         readings.append(SensorReading(
             sensor=sensor,
@@ -91,6 +112,18 @@ def _seed_readings(sensor: Sensor, num_hours: int = 48) -> int:
 
 class Command(BaseCommand):
     help = "Idempotently provision the simulator service account, DRF auth token, demo sensors, and seed demo readings."
+
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--force-reseed",
+            action="store_true",
+            default=False,
+            help=(
+                "Delete all existing readings for the 5 demo sensors and re-seed "
+                "them from scratch. Use when previously seeded readings have bad "
+                "values (e.g. wrong diurnal timezone offset)."
+            ),
+        )
 
     def handle(self, *args, **options):
         User = get_user_model()
@@ -155,7 +188,19 @@ class Command(BaseCommand):
             )
         )
 
-        # 4. Seed demo readings for any sensor that lacks sufficient data
+        # 4. Seed demo readings
+        force = options.get("force_reseed", False)
+        if force:
+            deleted_total = 0
+            for sensor in sensors:
+                n, _ = SensorReading.objects.filter(sensor=sensor).delete()
+                deleted_total += n
+            self.stdout.write(
+                self.style.WARNING(
+                    f"[bootstrap_demo] --force-reseed: deleted {deleted_total} existing readings."
+                )
+            )
+
         total_seeded = 0
         for sensor in sensors:
             current_count = SensorReading.objects.filter(sensor=sensor).count()
