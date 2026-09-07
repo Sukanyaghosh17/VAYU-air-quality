@@ -60,3 +60,31 @@ class IsAuthenticatedReadOrCreate(BasePermission):
     def has_permission(self, request, view):
         return bool(request.user and request.user.is_authenticated) \
                and request.method in self.SAFE_OR_CREATE
+
+
+class AllowAnyReadRequireAuthCreate(BasePermission):
+    """
+    Public reads, authenticated writes (sensor readings ingest).
+
+    - GET / HEAD / OPTIONS are open to everyone, including anonymous visitors
+      (ensures the public dashboard and anonymous map/chart views can read live telemetry).
+    - POST requires authentication (request.user.is_authenticated), ensuring only
+      authorized simulators or service accounts with a valid Token can ingest readings.
+    - PUT / PATCH / DELETE return False for all users (readings are immutable raw data;
+      mutations are blocked).
+
+    Differs from IsAuthenticatedReadOrCreate:
+      IsAuthenticatedReadOrCreate requires authentication for both reads and writes.
+      AllowAnyReadRequireAuthCreate keeps read access fully public (for the unauthenticated
+      web dashboard) while strictly requiring authentication for write operations.
+    """
+
+    SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
+
+    def has_permission(self, request, view):
+        if request.method in self.SAFE_METHODS:
+            return True
+        if request.method == "POST":
+            return bool(request.user and request.user.is_authenticated)
+        return False
+

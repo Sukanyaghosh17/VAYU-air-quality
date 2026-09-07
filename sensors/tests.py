@@ -178,9 +178,30 @@ class SensorReadingAPITests(APITestCase):
         ids = [r["sensor"] for r in resp.data["results"]]
         self.assertTrue(all(i == self.sensor.pk for i in ids))
 
+    def test_anonymous_reads_allowed(self):
+        """
+        Public dashboard visitor: GET /readings/latest/ and GET /readings/history/
+        must succeed with 200 OK without any authentication credentials.
+        """
+        self.client.credentials()  # No authentication at all
+        make_reading(self.sensor, pm25=22.0)
+
+        # GET /api/v1/readings/latest/
+        latest_resp = self.client.get(f"{self.list_url}latest/")
+        self.assertEqual(latest_resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(len(latest_resp.data) >= 1)
+
+        # GET /api/v1/readings/history/?sensor=<id>
+        history_resp = self.client.get(
+            f"{self.list_url}history/",
+            {"sensor": self.sensor.pk, "range": "24h"},
+        )
+        self.assertEqual(history_resp.status_code, status.HTTP_200_OK)
+        self.assertIsInstance(history_resp.data, list)
+
     def test_put_rejected(self):
         """
-        Readings are immutable — PUT must be rejected with 403 by IsAuthenticatedReadOrCreate.
+        Readings are immutable — PUT must be rejected with 403 by AllowAnyReadRequireAuthCreate.
         """
         reading = make_reading(self.sensor)
         self.auth(self.admin_token)

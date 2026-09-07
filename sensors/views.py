@@ -41,7 +41,11 @@ from .aqi import compute_aqi, resolve_location
 from .external_aqi import fetch_external_aqi
 from .geocoding import geocode
 from .models import Sensor, SensorReading
-from .permissions import IsAdminOrReadOnly, IsAuthenticatedReadOrCreate
+from .permissions import (
+    AllowAnyReadRequireAuthCreate,
+    IsAdminOrReadOnly,
+    IsAuthenticatedReadOrCreate,
+)
 from .serializers import SensorReadingSerializer, SensorSerializer
 
 
@@ -93,7 +97,7 @@ class SensorReadingViewSet(
     """
 
     serializer_class = SensorReadingSerializer
-    permission_classes = [IsAuthenticatedReadOrCreate]
+    permission_classes = [AllowAnyReadRequireAuthCreate]
     throttle_scope = "readings_ingest"
 
     def get_queryset(self):
