@@ -11,15 +11,19 @@ Token auth is used throughout (not session) because that is the auth path
 the Phase 3 simulator will use — ensuring tests cover the real code path.
 """
 
+from datetime import timedelta
+from io import StringIO
+
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.test import override_settings
+from django.core.management import call_command
+from django.test import TestCase, override_settings
+from django.utils import timezone
+from rest_framework import status
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
-from rest_framework import status
-from django.utils import timezone
-from datetime import timedelta
 
+from alerts.models import Alert
 from sensors.models import Sensor, SensorReading
 
 User = get_user_model()
@@ -58,6 +62,7 @@ class SensorAPITests(APITestCase):
     def setUp(self):
         self.admin, self.admin_token = make_user("admin_user", role="admin")
         self.user, self.user_token = make_user("regular_user", role="user")
+        self.service, self.service_token = make_user("service_user", role="service")
         self.sensor = make_sensor()
         self.list_url = "/api/v1/sensors/"
 
@@ -94,6 +99,56 @@ class SensorAPITests(APITestCase):
             "installed_at": "2025-06-01",
         }
         resp = self.client.post(self.list_url, payload, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_create_as_service_account(self):
+        """Service accounts can provision new sensors."""
+        self.auth(self.service_token)
+        payload = {
+            "sensor_code": "SEN-SRV-01",
+            "location": "Warehouse Sensor",
+            "status": "active",
+            "installed_at": "2025-06-01",
+        }
+        resp = self.client.post(self.list_url, payload, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(resp.data["sensor_code"], "SEN-SRV-01")
+
+    def test_service_account_cannot_modify_or_delete_sensor(self):
+        """Service accounts must NOT have broad admin rights (cannot update/delete sensors)."""
+        self.auth(self.service_token)
+        detail_url = f"{self.list_url}{self.sensor.pk}/"
+        resp_patch = self.client.patch(detail_url, {"location": "Hacked Location"}, format="json")
+        self.assertEqual(resp_patch.status_code, status.HTTP_403_FORBIDDEN)
+        resp_delete = self.client.delete(detail_url)
+        self.assertEqual(resp_delete.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_service_account_cannot_create_threshold(self):
+        """Service accounts must be blocked by IsAdminOrReadOnly on ThresholdViewSet."""
+        self.auth(self.service_token)
+        resp = self.client.post(
+            "/api/v1/thresholds/",
+            {"parameter": "pm25", "warning_limit": 30.0, "critical_limit": 60.0},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_service_account_cannot_patch_alert(self):
+        """Service accounts must be blocked by IsAdminOrReadOnly on AlertViewSet.partial_update."""
+        alert = Alert.objects.create(
+            sensor=self.sensor,
+            alert_type="threshold",
+            parameter="pm25",
+            value=85.0,
+            severity="high",
+            status="open",
+        )
+        self.auth(self.service_token)
+        resp = self.client.patch(
+            f"/api/v1/alerts/{alert.pk}/",
+            {"status": "resolved"},
+            format="json",
+        )
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_retrieve(self):
@@ -1085,4 +1140,45 @@ class DRFThrottlingTests(APITestCase):
             self.assertEqual(r2.status_code, status.HTTP_201_CREATED)
             r3 = self.client.post(self.url, payload, format="json")
             self.assertEqual(r3.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+
+# ── bootstrap_demo management command tests ───────────────────────────────────
+
+class BootstrapDemoCommandTests(TestCase):
+    def test_bootstrap_demo_provisions_service_user_and_sensors(self):
+        out = StringIO()
+        call_command("bootstrap_demo", stdout=out)
+        output = out.getvalue()
+        self.assertIn("SIMULATOR_TOKEN=", output)
+
+        User = get_user_model()
+        user = User.objects.get(username="simulator")
+        self.assertEqual(user.role, "service")
+        self.assertFalse(user.is_admin())
+        self.assertTrue(user.can_provision_sensors)
+
+        token = Token.objects.get(user=user)
+        self.assertIn(f"SIMULATOR_TOKEN={token.key}", output)
+
+        sensors = Sensor.objects.filter(sensor_code__startswith="SIM-")
+        self.assertEqual(sensors.count(), 5)
+
+    def test_bootstrap_demo_is_idempotent(self):
+        out1 = StringIO()
+        call_command("bootstrap_demo", stdout=out1)
+        out2 = StringIO()
+        call_command("bootstrap_demo", stdout=out2)
+
+        User = get_user_model()
+        self.assertEqual(User.objects.filter(username="simulator").count(), 1)
+        self.assertEqual(Sensor.objects.filter(sensor_code__startswith="SIM-").count(), 5)
+
+    def test_bootstrap_demo_updates_legacy_user_role(self):
+        User = get_user_model()
+        User.objects.create_user(username="simulator", password="oldpassword", role="user")
+        out = StringIO()
+        call_command("bootstrap_demo", stdout=out)
+        user = User.objects.get(username="simulator")
+        self.assertEqual(user.role, "service")
+
 
