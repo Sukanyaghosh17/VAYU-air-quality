@@ -11,6 +11,7 @@ Token auth is used throughout (not session) because that is the auth path
 the Phase 3 simulator will use — ensuring tests cover the real code path.
 """
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
@@ -991,3 +992,43 @@ class SequentialCityTapTests(APITestCase):
                     search_pm25, latest_pm25, places=1,
                     msg=f"{city}: search PM2.5={search_pm25} != latest PM2.5={latest_pm25}"
                 )
+
+
+class DRFThrottlingTests(APITestCase):
+    """Verifies that DRF rate throttling is configured and enforced."""
+
+    def setUp(self):
+        self.user, self.token = make_user("throttled_sim", role="user")
+        self.sensor = make_sensor("SEN-THR-01")
+        self.url = "/api/v1/readings/"
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.token}")
+
+    def test_throttle_classes_and_rates_configured(self):
+        classes = settings.REST_FRAMEWORK.get("DEFAULT_THROTTLE_CLASSES", [])
+        self.assertTrue(any("IngestScopedRateThrottle" in c or "ScopedRateThrottle" in c for c in classes))
+        rates = settings.REST_FRAMEWORK.get("DEFAULT_THROTTLE_RATES", {})
+        self.assertIn("anon", rates)
+        self.assertIn("user", rates)
+        self.assertIn("readings_ingest", rates)
+
+    def test_ingest_rate_limit_enforced(self):
+        from unittest.mock import patch
+        from django.core.cache import cache
+        from sensors.throttling import IngestScopedRateThrottle
+
+        cache.clear()
+        payload = {
+            "sensor": self.sensor.pk,
+            "pm25": 15.0,
+            "pm10": 30.0,
+            "temperature": 25.0,
+            "humidity": 50.0,
+        }
+        with patch.dict(IngestScopedRateThrottle.THROTTLE_RATES, {"readings_ingest": "2/min"}):
+            r1 = self.client.post(self.url, payload, format="json")
+            self.assertEqual(r1.status_code, status.HTTP_201_CREATED)
+            r2 = self.client.post(self.url, payload, format="json")
+            self.assertEqual(r2.status_code, status.HTTP_201_CREATED)
+            r3 = self.client.post(self.url, payload, format="json")
+            self.assertEqual(r3.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+

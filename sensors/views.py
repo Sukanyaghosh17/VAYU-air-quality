@@ -94,6 +94,7 @@ class SensorReadingViewSet(
 
     serializer_class = SensorReadingSerializer
     permission_classes = [IsAuthenticatedReadOrCreate]
+    throttle_scope = "readings_ingest"
 
     def get_queryset(self):
         qs = SensorReading.objects.select_related("sensor").order_by("-timestamp")
