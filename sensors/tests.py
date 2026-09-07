@@ -681,7 +681,7 @@ class LocationSearchGeolocationTests(APITestCase):
         resp = self.client.get(SEARCH_URL, {"lat": "22.572612", "lon": "88.363891"})
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data["results"][0]["station_name"], "Fort William Kolkata")
-        
+
         # Verify fetch_external_aqi was called with rounded coordinates in cache key
         mock_fetch.assert_called_once_with(
             22.572612, 88.363891, "vayu_waqi_geo_22.573_88.364"
@@ -1178,5 +1178,3 @@ class BootstrapDemoCommandTests(TestCase):
         call_command("bootstrap_demo", stdout=out)
         user = User.objects.get(username="simulator")
         self.assertEqual(user.role, "service")
-
-
