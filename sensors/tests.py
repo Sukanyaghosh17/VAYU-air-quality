@@ -13,6 +13,7 @@ the Phase 3 simulator will use — ensuring tests cover the real code path.
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.test import override_settings
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
 from rest_framework import status
@@ -584,6 +585,7 @@ class LocationSearchSanitizationTests(APITestCase):
         self.assertIn(resp.status_code, [200, 404])
 
 
+@override_settings(WAQI_API_TOKEN="test-token-for-mocked-waqi-calls")
 class LocationSearchGeolocationTests(APITestCase):
     """Tests for lat/lon coordinate geolocation search path."""
 
@@ -642,6 +644,7 @@ class LocationSearchGeolocationTests(APITestCase):
 from sensors.external_aqi import fetch_external_aqi
 
 
+@override_settings(WAQI_API_TOKEN="test-token-for-mocked-waqi-calls")
 class WaqiFallbackChainTests(APITestCase):
     """Unit tests for the multi-step WAQI fallback chain."""
 

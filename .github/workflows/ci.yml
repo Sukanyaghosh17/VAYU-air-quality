@@ -16,6 +16,7 @@ jobs:
       DEBUG: "False"
       DJANGO_SETTINGS_MODULE: "vayu.settings_test"
       DATABASE_URL: "sqlite:///:memory:"
+      WAQI_API_TOKEN: "ci-placeholder-token"
 
     steps:
       - name: Checkout code
