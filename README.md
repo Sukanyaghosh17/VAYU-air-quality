@@ -118,19 +118,17 @@ Open your browser and navigate to:
 
 The platform includes a multi-featured simulator (`simulate_sensors.py`) to stream realistic air-quality telemetry directly into the ingest API.
 
-### Step 1: Generate Simulator API Token
-Run this one-line command to initialize the simulator user and output its authentication token:
+### Step 1: Provision Simulator Service Account & API Token
+Run the idempotent `bootstrap_demo` command to initialize the dedicated `simulator` service account (scoped with `role='service'` and `can_provision_sensors`), pre-create 5 demo sensors, and output its authentication token:
 
 ```bash
-python manage.py shell -c "
-import environ; from pathlib import Path; from django.contrib.auth import get_user_model; from rest_framework.authtoken.models import Token
-env = environ.Env(); environ.Env.read_env(Path('.env'))
-User = get_user_model()
-u, _ = User.objects.get_or_create(username='simulator', defaults={'role': 'user'})
-u.set_password(env('SIMULATOR_PASSWORD')); u.save()
-t, _ = Token.objects.get_or_create(user=u)
-print('SIMULATOR_TOKEN=' + t.key)
-"
+python manage.py bootstrap_demo
+```
+
+Output:
+```text
+SIMULATOR_TOKEN=c2d595b1c8c4963cbf5f83e835f24152617545f3
+[bootstrap_demo] Completed: 5 sensors created, 0 existing sensors preserved.
 ```
 
 Copy the output token and paste it into `.env` as `SIMULATOR_TOKEN=<token>`.
@@ -158,6 +156,20 @@ python simulate_sensors.py --sensors 3 --duration 60
 | **PM10** | 30 ± 10 | 150 – 360 | µg/m³ |
 | **Temperature** | 25 ± 3 | 35 – 45 | °C |
 | **Humidity** | 55 ± 10 | 88 – 99 | % |
+
+### ☁️ Keeping the Render Free Deployment Populated
+
+On Render's Free tier, Background Workers and Cron Jobs are not supported (only web services and Key Value offer free compute plans). Because of this, a scheduled GitHub Actions workflow (`.github/workflows/simulate.yml`) is used to periodically feed telemetry into the deployed application at zero cost:
+
+1. **Automatic Provisioning via `build.sh`**:
+   Whenever the application deploys on Render, `build.sh` automatically runs `python manage.py bootstrap_demo` right after `migrate`. It ensures the `simulator` service account, DRF auth token, and 5 demo sensors exist in PostgreSQL without duplicates.
+2. **Configure GitHub Actions Secret**:
+   - Check the Render deploy logs (or run `python manage.py bootstrap_demo` locally connected to `DATABASE_URL`, or in Render's SSH shell) to view the printed `SIMULATOR_TOKEN=<key>`.
+   - In your GitHub repository, navigate to **Settings → Secrets and variables → Actions**.
+   - Create a repository secret named `SIMULATOR_TOKEN` and paste the token key.
+3. **Automated Bursts**:
+   - The workflow runs automatically every 10 minutes (`*/10 * * * *`) and runs a 4-minute simulation burst (`--duration 240 --interval 10`). You can also trigger it manually anytime via **Actions → Run Telemetry Simulator → Run workflow** (`workflow_dispatch`).
+   - *Free-tier characteristics*: The dashboard displays data in periodic waves rather than a nonstop stream. Furthermore, Render free web services spin down after 15 minutes of inactivity; a burst every 10 minutes helps keep the service warm, though the first request in a burst after a spin-down may experience a slight cold-start latency. Continuous background workers provide smoother streaming but require a paid Render plan.
 
 ---
 
