@@ -5,11 +5,16 @@
 {% block body %}
 <div class="layout">
 
-  <!-- ── Navbar ──────────────────────────────────────────────── -->
+  <!-- ── Navbar ──────────────────────────────────────────────────── -->
   <nav class="navbar">
     <div class="navbar-brand">
-      <span class="brand-logo">VAYU</span>
-      <span class="brand-sub">Air Quality</span>
+      <div class="brand-logo-wrap">
+        <div class="brand-logo-icon">V</div>
+        <div class="brand-logo-text">
+          <span class="brand-logo">VAYU <span class="brand-version">V2.4</span></span>
+          <span class="brand-sub">Air Quality Monitor</span>
+        </div>
+      </div>
     </div>
 
     <!-- ── Location Search Bar ─────────────────────────────── -->
@@ -49,10 +54,54 @@
     </div>
 
     <div class="navbar-right">
+      <!-- Live indicator -->
       <div class="refresh-indicator">
         <div class="pulse-dot"></div>
         Live · updated <span id="last-updated">—</span>
       </div>
+
+      <!-- Notification bell -->
+      <button class="navbar-icon-btn" id="notif-btn" title="Notifications" aria-label="Notifications">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+          <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+        </svg>
+        <span class="notif-dot"></span>
+      </button>
+
+      <!-- Dark / Light mode premium toggle -->
+      <div class="premium-switch">
+        <input type="checkbox" id="theme">
+        <label class="premium-toggle" for="theme" title="Toggle dark/light mode">
+          <div class="blob"></div>
+
+          <span class="icon sun">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="5"/>
+              <line x1="12" y1="1"  x2="12" y2="3"/>
+              <line x1="12" y1="21" x2="12" y2="23"/>
+              <line x1="4.22" y1="4.22"  x2="5.64" y2="5.64"/>
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+              <line x1="1"  y1="12" x2="3"  y2="12"/>
+              <line x1="21" y1="12" x2="23" y2="12"/>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+              <line x1="18.36" y1="5.64"  x2="19.78" y2="4.22"/>
+            </svg>
+          </span>
+
+          <span class="icon moon">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+            </svg>
+          </span>
+
+          <span class="highlight"></span>
+        </label>
+      </div>
+
+
     </div>
   </nav>
 
@@ -60,7 +109,10 @@
   <aside class="sidebar">
 
     <!-- City quick-select tiles -->
-    <div class="sidebar-section-label">Metro Cities</div>
+    <div class="sidebar-section-label">
+      Metro Cities
+      <span class="sidebar-count-badge" id="metro-count">5</span>
+    </div>
     <div class="city-tiles" id="city-tiles">
       <button class="city-tile" onclick="citySearch('Kolkata')" id="city-tile-kolkata" title="Kolkata, Salt Lake">
         <span class="city-tile-flag">🟢</span>
@@ -84,7 +136,10 @@
       </button>
     </div>
 
-    <div class="sidebar-section-label" style="margin-top:14px">Sensor Stations</div>
+    <div class="sidebar-section-label" style="margin-top:12px">
+      Sensor Stations
+      <span class="sidebar-count-badge" id="sensor-total-count" style="background:rgba(0,201,167,0.1);border-color:rgba(0,201,167,0.3);color:var(--teal)">AQI</span>
+    </div>
     <div id="sensor-list">
       <!-- populated by dashboard.js -->
       <div class="sensor-item">
@@ -95,21 +150,34 @@
         </div>
       </div>
     </div>
+
+
   </aside>
 
   <!-- ── Main ────────────────────────────────────────────────── -->
   <main class="main">
 
-    <!-- View Mode Toggle -->
-    <div class="view-mode-toggle" id="view-mode-toggle">
-      <button class="view-mode-btn active" id="btn-dashboard-view" onclick="switchView('dashboard')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-        Dashboard
-      </button>
-      <button class="view-mode-btn" id="btn-map-view" onclick="switchView('map')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
-        Map View
-      </button>
+    <!-- View Mode Toggle + Active Sensor Node -->
+    <div class="view-mode-bar">
+      <div class="view-mode-toggle" id="view-mode-toggle">
+        <button class="view-mode-btn active" id="btn-dashboard-view" onclick="switchView('dashboard')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          Dashboard
+        </button>
+        <button class="view-mode-btn" id="btn-map-view" onclick="switchView('map')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+          Map View
+        </button>
+      </div>
+
+      <!-- Active Sensor Node (right) -->
+      <div class="active-sensor-node" id="active-node-label">
+        Active Sensor Node:
+        <span class="sensor-node-pill" id="active-node-pill">
+          <svg viewBox="0 0 10 10" fill="currentColor" width="6" height="6"><circle cx="5" cy="5" r="5"/></svg>
+          <span id="active-node-text">—</span>
+        </span>
+      </div>
     </div>
 
     <!-- ── Dashboard View ─────────────────────────────────────── -->
@@ -174,38 +242,46 @@
 
     <!-- Stat cards (shown for VAYU sensors or fleet-wide view) -->
     <div id="vayu-dashboard-section">
+      <!-- Current Readings header -->
       <div class="section-header">
         <div class="section-title">Current Readings</div>
-        <div class="section-badge" id="sensor-badge">Fleet average</div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <span class="section-badge" id="sensor-badge">Fleet average</span>
+          <span class="section-meta telemetry-ok">Telemetry Stream: OK</span>
+        </div>
       </div>
       <div class="stats-grid">
         <div class="glass-card stat-card pm25" id="stat-pm25" data-label="PM2.5">
           <div class="stat-label">PM2.5</div>
-          <div class="skeleton" style="height:36px;width:80px;margin-top:8px"></div>
+          <div class="skeleton" style="height:32px;width:80px;margin-top:8px"></div>
         </div>
         <div class="glass-card stat-card pm10" id="stat-pm10" data-label="PM10">
           <div class="stat-label">PM10</div>
-          <div class="skeleton" style="height:36px;width:80px;margin-top:8px"></div>
+          <div class="skeleton" style="height:32px;width:80px;margin-top:8px"></div>
         </div>
         <div class="glass-card stat-card temp" id="stat-temp" data-label="Temperature">
           <div class="stat-label">Temperature</div>
-          <div class="skeleton" style="height:36px;width:80px;margin-top:8px"></div>
+          <div class="skeleton" style="height:32px;width:80px;margin-top:8px"></div>
         </div>
         <div class="glass-card stat-card hum" id="stat-hum" data-label="Humidity">
           <div class="stat-label">Humidity</div>
-          <div class="skeleton" style="height:36px;width:80px;margin-top:8px"></div>
+          <div class="skeleton" style="height:32px;width:80px;margin-top:8px"></div>
         </div>
       </div>
 
       <!-- Trend charts -->
       <div class="section-header">
-        <div class="section-title">Trends</div>
+        <div class="section-title">Historical Trends</div>
+        <span class="section-meta">Granularity: Hourly updates</span>
       </div>
       <div class="charts-grid">
         <!-- PM2.5 chart -->
         <div class="glass-card chart-card">
           <div class="chart-header">
-            <span class="chart-title text-pm25">PM2.5 Trend</span>
+            <div class="chart-title-wrap">
+              <span class="chart-title text-pm25">PM2.5 Trend</span>
+              <span class="chart-subtitle">Fine particulate matter level</span>
+            </div>
             <div class="chart-range-btns" id="pm25-range-btns">
               <button class="chart-range-btn active" onclick="setRange('pm25','24h',this)" id="pm25-24h">24h</button>
               <button class="chart-range-btn"         onclick="setRange('pm25','7d',this)"  id="pm25-7d">7d</button>
@@ -220,7 +296,10 @@
         <!-- PM10 chart -->
         <div class="glass-card chart-card">
           <div class="chart-header">
-            <span class="chart-title text-pm10">PM10 Trend</span>
+            <div class="chart-title-wrap">
+              <span class="chart-title text-pm10">PM10 Trend</span>
+              <span class="chart-subtitle">Coarse particulate matter level</span>
+            </div>
             <div class="chart-range-btns" id="pm10-range-btns">
               <button class="chart-range-btn active" onclick="setRange('pm10','24h',this)" id="pm10-24h">24h</button>
               <button class="chart-range-btn"         onclick="setRange('pm10','7d',this)"  id="pm10-7d">7d</button>
@@ -235,9 +314,15 @@
 
       <!-- Alert feed -->
       <div class="section-header">
-        <div class="section-title">
-          Open Alerts
-          <span class="section-badge" id="alert-count">—</span>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="section-title">
+            Open Alerts
+          </div>
+          <span class="section-badge" id="alert-count" style="background:rgba(56,178,172,0.1);border-color:rgba(56,178,172,0.25)">0 Active Warnings</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <span class="alert-all-normal" id="alert-normal-msg">All regional sensor stations report normal AQI thresholds.</span>
+          <a href="#" class="alert-log-link">View Log History →</a>
         </div>
       </div>
       <div class="glass-card alert-card">
@@ -261,6 +346,26 @@
           </tbody>
         </table>
       </div>
+
+      <!-- Dashboard footer -->
+      <div class="dashboard-footer">
+        <div class="footer-left">
+          <span>
+            <span class="footer-mesh-label">Sensor Mesh Health</span>
+            &nbsp;
+            <span class="footer-mesh-value" id="footer-mesh-status">100% Operational</span>
+          </span>
+          <span class="footer-sep">·</span>
+          <span>VAYU IoT Environmental Surveillance Platform</span>
+          <span class="footer-sep">·</span>
+          <span>National Air Quality Standard ISO 14001 Compliant</span>
+        </div>
+        <div class="footer-right">
+          <span class="footer-nodes-dot"></span>
+          <span id="footer-nodes-label">All 5 Metro Nodes Online</span>
+        </div>
+      </div>
+
     </div><!-- end #vayu-dashboard-section -->
 
     </div><!-- end #dashboard-view-panel -->
@@ -272,6 +377,7 @@
 
   </main>
 </div>
+
 
 
 <!-- Pass last_location from Django session into JS -->

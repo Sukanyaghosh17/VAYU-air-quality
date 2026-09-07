@@ -129,20 +129,13 @@ function updateThemeIcon(theme) {
 }
 
 function toggleTheme() {
-  // Source of truth is data-theme on <html>, not checkbox.checked
-  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-  const next   = isDark ? 'light' : 'dark';
-
+  const checkbox = document.getElementById('theme');
+  const next = checkbox && checkbox.checked ? 'dark' : 'light';
   if (next === 'dark') {
     document.documentElement.setAttribute('data-theme', 'dark');
   } else {
     document.documentElement.removeAttribute('data-theme');
   }
-
-  // Sync checkbox visual (programmatic change does NOT re-fire 'change')
-  const checkbox = document.getElementById('theme');
-  if (checkbox) checkbox.checked = (next === 'dark');
-
   localStorage.setItem('vayu-theme', next);
   updateChartsTheme();
 }
@@ -871,20 +864,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Apply saved theme BEFORE creating charts so colours are correct
   initTheme();
 
-  // Wire premium checkbox toggle (change + click fallback)
+  // Wire premium checkbox toggle
   const themeCheckbox = document.getElementById('theme');
-  if (themeCheckbox) {
-    themeCheckbox.addEventListener('change', toggleTheme);
-  }
-  // Also attach directly to the label as a click fallback
-  const themeLabel = document.querySelector('label.premium-toggle');
-  if (themeLabel) {
-    themeLabel.addEventListener('click', (e) => {
-      // Small delay so browser has toggled checkbox.checked first
-      setTimeout(toggleTheme, 0);
-      e.preventDefault(); // prevent double-fire with the input's change event
-    });
-  }
+  if (themeCheckbox) themeCheckbox.addEventListener('change', toggleTheme);
 
   // Notification bell (placeholder — no-op)
   const notifBtn = document.getElementById('notif-btn');

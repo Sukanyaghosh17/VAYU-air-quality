@@ -1,6 +1,9 @@
 /**
- * dashboard.js — VAYU Phase 6 frontend
- * ======================================
+ * dashboard.js — VAYU Dashboard frontend
+ * ========================================
+ * Light theme (default) + Dark theme toggle via [data-theme="dark"] on <html>.
+ * Theme preference persisted in localStorage under key "vayu-theme".
+ *
  * Polls the DRF API using session cookies (no token needed in the browser).
  * All API calls use fetch() with credentials: 'same-origin'.
  *
@@ -86,14 +89,87 @@ function labelForParam(param) {
   return { pm25: 'PM2.5', pm10: 'PM10', temperature: 'Temp', humidity: 'Humidity' }[param] ?? param;
 }
 
+/* ── Theme helpers ──────────────────────────────────────────── */
+function isDarkTheme() {
+  return document.documentElement.getAttribute('data-theme') === 'dark';
+}
+
+function getChartColors() {
+  const dark = isDarkTheme();
+  return {
+    grid:          dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)',
+    tick:          dark ? '#4a5568' : '#a0aec0',
+    tooltipBg:     dark ? 'rgba(10,14,26,0.92)'   : 'rgba(26,32,44,0.92)',
+    tooltipBorder: dark ? 'rgba(255,255,255,0.1)'  : 'rgba(0,0,0,0.12)',
+    ringTrack:     dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.08)',
+  };
+}
+
+/**
+ * initTheme — reads localStorage and applies [data-theme] to <html>.
+ * Updates the toggle button icon accordingly.
+ */
+function initTheme() {
+  const saved = localStorage.getItem('vayu-theme') || 'light';
+  const checkbox = document.getElementById('theme');
+  if (saved === 'dark') {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    if (checkbox) checkbox.checked = true;
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+    if (checkbox) checkbox.checked = false;
+  }
+}
+
+function updateThemeIcon(theme) {
+  const btn = document.getElementById('theme-toggle-btn');
+  if (!btn) return;
+  btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+  btn.title = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
+}
+
+function toggleTheme() {
+  // Source of truth is data-theme on <html>, not checkbox.checked
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const next   = isDark ? 'light' : 'dark';
+
+  if (next === 'dark') {
+    document.documentElement.setAttribute('data-theme', 'dark');
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+  }
+
+  // Sync checkbox visual (programmatic change does NOT re-fire 'change')
+  const checkbox = document.getElementById('theme');
+  if (checkbox) checkbox.checked = (next === 'dark');
+
+  localStorage.setItem('vayu-theme', next);
+  updateChartsTheme();
+}
+
+function updateChartsTheme() {
+  const c = getChartColors();
+  [state.pm25Chart, state.pm10Chart].forEach(chart => {
+    if (!chart) return;
+    chart.options.scales.x.ticks.color  = c.tick;
+    chart.options.scales.x.grid.color   = c.grid;
+    chart.options.scales.y.ticks.color  = c.tick;
+    chart.options.scales.y.grid.color   = c.grid;
+    chart.options.plugins.tooltip.backgroundColor  = c.tooltipBg;
+    chart.options.plugins.tooltip.borderColor      = c.tooltipBorder;
+    chart.update('none');
+  });
+}
+
 /* ── SVG ring ───────────────────────────────────────────────── */
 function makeRing(value, max, color, size = 56) {
   const r = 22, cx = size / 2, cy = size / 2;
   const circ = 2 * Math.PI * r;
   const pct = Math.min(value / max, 1);
   const dash = pct * circ;
+  const trackColor = isDarkTheme() ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.08)';
   return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="4"/>
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${trackColor}" stroke-width="4"/>
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-width="4"
       stroke-dasharray="${dash} ${circ}" stroke-dashoffset="${circ / 4}"
       stroke-linecap="round" transform="rotate(-90 ${cx} ${cy})"/>
@@ -150,8 +226,15 @@ function renderSidebar(sensors) {
         <div class="sensor-code">${s.sensor_code}</div>
         <div class="sensor-loc">${s.location}</div>
       </div>
-      <div class="sensor-count">${s.reading_count ?? ''}</div>
+      <div class="sensor-aqi-badge">${s.reading_count ?? '—'}</div>
     </div>`).join('');
+
+  // Update active node pill in header
+  const active = sensors.find(s => s.id === state.selectedSensorId);
+  const nodeText = document.getElementById('active-node-text');
+  if (nodeText) {
+    nodeText.textContent = active ? `${active.sensor_code} · ${active.location}` : '—';
+  }
 }
 
 /**
@@ -239,6 +322,7 @@ function createChart(canvasId, label, colorHex) {
   const canvas = document.getElementById(canvasId);
   if (!canvas) return null;
   const ctx = canvas.getContext('2d');
+  const c = getChartColors();
   return new Chart(ctx, {
     type: 'line',
     data: {
@@ -249,7 +333,9 @@ function createChart(canvasId, label, colorHex) {
         borderColor: colorHex,
         backgroundColor: buildGradient(ctx, colorHex),
         borderWidth: 2,
-        pointRadius: 0,
+        pointRadius: 3,
+        pointBackgroundColor: colorHex,
+        pointBorderColor: 'transparent',
         pointHoverRadius: 5,
         pointHoverBackgroundColor: colorHex,
         tension: 0.4,
@@ -262,22 +348,24 @@ function createChart(canvasId, label, colorHex) {
       interaction: { mode: 'index', intersect: false },
       scales: {
         x: {
-          ticks: { color: '#4a5568', maxTicksLimit: 8, font: { size: 10, family: 'Inter' } },
-          grid: { color: 'rgba(255,255,255,0.04)' },
+          ticks: { color: c.tick, maxTicksLimit: 8, font: { size: 10, family: 'Inter' } },
+          grid:  { color: c.grid },
+          border: { display: false },
         },
         y: {
-          ticks: { color: '#4a5568', font: { size: 10, family: 'Inter' } },
-          grid: { color: 'rgba(255,255,255,0.06)' },
+          ticks: { color: c.tick, font: { size: 10, family: 'Inter' } },
+          grid:  { color: c.grid },
+          border: { display: false },
         },
       },
       plugins: {
         legend: { display: false },
         tooltip: {
-          backgroundColor: 'rgba(10,14,26,0.9)',
-          borderColor: 'rgba(255,255,255,0.1)',
+          backgroundColor:  c.tooltipBg,
+          borderColor:      c.tooltipBorder,
           borderWidth: 1,
           titleFont: { family: 'Inter', size: 12 },
-          bodyFont: { family: 'Inter', size: 12 },
+          bodyFont:  { family: 'Inter', size: 12 },
           padding: 10,
         },
       },
@@ -780,7 +868,32 @@ function initSearchBar() {
 
 /* ── Init ────────────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', async () => {
-  // Create charts
+  // Apply saved theme BEFORE creating charts so colours are correct
+  initTheme();
+
+  // Wire premium checkbox toggle (change + click fallback)
+  const themeCheckbox = document.getElementById('theme');
+  if (themeCheckbox) {
+    themeCheckbox.addEventListener('change', toggleTheme);
+  }
+  // Also attach directly to the label as a click fallback
+  const themeLabel = document.querySelector('label.premium-toggle');
+  if (themeLabel) {
+    themeLabel.addEventListener('click', (e) => {
+      // Small delay so browser has toggled checkbox.checked first
+      setTimeout(toggleTheme, 0);
+      e.preventDefault(); // prevent double-fire with the input's change event
+    });
+  }
+
+  // Notification bell (placeholder — no-op)
+  const notifBtn = document.getElementById('notif-btn');
+  if (notifBtn) notifBtn.addEventListener('click', () => {
+    notifBtn.style.transform = 'scale(0.9)';
+    setTimeout(() => notifBtn.style.transform = '', 150);
+  });
+
+  // Create charts (colours depend on current theme)
   state.pm25Chart = createChart('pm25-chart', 'PM2.5', '#4299e1');
   state.pm10Chart = createChart('pm10-chart', 'PM10',  '#ed8936');
 
