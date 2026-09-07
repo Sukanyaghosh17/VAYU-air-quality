@@ -55,6 +55,22 @@ from typing import Optional
 # ── CPCB breakpoints ─────────────────────────────────────────────────────────
 # Each entry: (CP_Lo, CP_Hi, AQI_Lo, AQI_Hi)
 # Source: CPCB National Air Quality Index (2014)
+#
+# Boundary Resolution Note:
+# CPCB standards often publish disjoint integer ranges (e.g. 0–30, 31–60).
+# In continuous float telemetry, disjoint integer ranges leave gaps (e.g. 30.5).
+# Therefore, bands are defined with continuous endpoints where CP_Hi of band N
+# equals CP_Lo of band N+1.
+# Breakpoints are evaluated sequentially in ascending order using `cp_lo <= value <= cp_hi`.
+# Consequently, values falling exactly on a boundary (30.0, 60.0, 90.0, 120.0, 250.0)
+# match the lower (milder) band:
+#   - 30.0  → matches (0.0, 30.0)   → AQI 50  ("Good")
+#   - 60.0  → matches (30.0, 60.0)  → AQI 100 ("Satisfactory")
+#   - 90.0  → matches (60.0, 90.0)  → AQI 200 ("Moderate")
+#   - 120.0 → matches (90.0, 120.0) → AQI 300 ("Poor")
+#   - 250.0 → matches (120.0, 250.0)→ AQI 400 ("Very Poor")
+# This deliberate choice guarantees deterministic, continuous category transitions
+# without gaps for floating-point sensor values.
 
 _PM25_BREAKPOINTS = [
     (0.0,  30.0,   0,  50),

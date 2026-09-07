@@ -484,6 +484,36 @@ class ComputeAqiTests(APITestCase):
         self.assertIsNotNone(result)
         self.assertEqual(result["category"], "Good")
 
+    def test_pm25_boundary_30_exact(self):
+        """At pm25=30.0 exactly, lower band (0.0, 30.0) matches first: AQI 50, Good."""
+        res = compute_aqi(pm25=30.0, pm10=None)
+        self.assertEqual(res["aqi"], 50)
+        self.assertEqual(res["category"], "Good")
+
+    def test_pm25_boundary_60_exact(self):
+        """At pm25=60.0 exactly, lower band (30.0, 60.0) matches first: AQI 100, Satisfactory."""
+        res = compute_aqi(pm25=60.0, pm10=None)
+        self.assertEqual(res["aqi"], 100)
+        self.assertEqual(res["category"], "Satisfactory")
+
+    def test_pm25_boundary_90_exact(self):
+        """At pm25=90.0 exactly, lower band (60.0, 90.0) matches first: AQI 200, Moderate."""
+        res = compute_aqi(pm25=90.0, pm10=None)
+        self.assertEqual(res["aqi"], 200)
+        self.assertEqual(res["category"], "Moderate")
+
+    def test_pm25_boundary_120_exact(self):
+        """At pm25=120.0 exactly, lower band (90.0, 120.0) matches first: AQI 300, Poor."""
+        res = compute_aqi(pm25=120.0, pm10=None)
+        self.assertEqual(res["aqi"], 300)
+        self.assertEqual(res["category"], "Poor")
+
+    def test_pm25_boundary_250_exact(self):
+        """At pm25=250.0 exactly, lower band (120.0, 250.0) matches first: AQI 400, Very Poor."""
+        res = compute_aqi(pm25=250.0, pm10=None)
+        self.assertEqual(res["aqi"], 400)
+        self.assertEqual(res["category"], "Very Poor")
+
     def test_alias_bangalore_resolves(self):
         terms = resolve_location("Bangalore")
         self.assertIn("Bangalore", terms)
