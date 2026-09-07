@@ -11,14 +11,12 @@ Token auth is used throughout (not session) because that is the auth path
 the Phase 3 simulator will use — ensuring tests cover the real code path.
 """
 
-from datetime import timedelta
 from io import StringIO
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.test import TestCase, override_settings
-from django.utils import timezone
 from rest_framework import status
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
@@ -330,7 +328,7 @@ class SensorReadingAPITests(APITestCase):
 
 # ── LocationSearchView tests ──────────────────────────────────────────────────
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from django.core.cache import cache as django_cache
 
 
