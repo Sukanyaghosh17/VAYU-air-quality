@@ -93,7 +93,7 @@ class SensorReadingViewSet(
     """
 
     serializer_class = SensorReadingSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticatedReadOrCreate]
 
     def get_queryset(self):
         qs = SensorReading.objects.select_related("sensor").order_by("-timestamp")
@@ -493,7 +493,7 @@ class SensorMapView(APIView):
         "timestamp":    str (ISO 8601) | null
     }
 
-    Requires authentication (IsAuthenticated). Read-only endpoint.
+    Public read-only endpoint (AllowAny).
     """
 
     permission_classes = [AllowAny]

@@ -135,7 +135,9 @@ class SensorReadingAPITests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
         self.assertEqual(resp.data["sensor_code"], self.sensor.sensor_code)
 
-    def test_create_unauthenticated_allowed(self):
+    def test_create_unauthenticated_rejected(self):
+        """POST /api/v1/readings/ must return 401/403 without a valid token."""
+        self.client.credentials()  # Clear auth credentials
         payload = {
             "sensor": self.sensor.pk,
             "pm25": 12.5,
@@ -144,7 +146,20 @@ class SensorReadingAPITests(APITestCase):
             "humidity": 60.0,
         }
         resp = self.client.post(self.list_url, payload, format="json")
-        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        self.assertIn(resp.status_code, [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN])
+
+    def test_create_invalid_token_rejected(self):
+        """POST /api/v1/readings/ must return 401 with an invalid token."""
+        self.client.credentials(HTTP_AUTHORIZATION="Token invalid-token-xyz")
+        payload = {
+            "sensor": self.sensor.pk,
+            "pm25": 12.5,
+            "pm10": 25.0,
+            "temperature": 28.0,
+            "humidity": 60.0,
+        }
+        resp = self.client.post(self.list_url, payload, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_list_returns_200(self):
         make_reading(self.sensor)
@@ -162,17 +177,14 @@ class SensorReadingAPITests(APITestCase):
         ids = [r["sensor"] for r in resp.data["results"]]
         self.assertTrue(all(i == self.sensor.pk for i in ids))
 
-    def test_put_returns_405(self):
+    def test_put_rejected(self):
         """
-        Readings are immutable — PUT must be rejected with 405.
-
-        We authenticate as admin to ensure DRF reaches the method-not-allowed
-        check rather than short-circuiting with a permission 403 first.
+        Readings are immutable — PUT must be rejected with 403 by IsAuthenticatedReadOrCreate.
         """
         reading = make_reading(self.sensor)
-        self.auth(self.admin_token)  # admin bypasses permission gate → hits method gate
+        self.auth(self.admin_token)
         resp = self.client.put(f"{self.list_url}{reading.pk}/", {}, format="json")
-        self.assertEqual(resp.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_latest_returns_one_per_sensor(self):
         sensor2 = make_sensor("SEN-R03")
