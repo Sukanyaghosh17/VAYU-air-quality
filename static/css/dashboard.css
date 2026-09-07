@@ -1066,3 +1066,376 @@ body {
   left: calc(100% - 28px);
   background: rgba(255,255,255,0.07);
 }
+
+/* ============================================================
+   MAP VIEW — layout, sidebar, legend, layer controls, info panel
+   ============================================================ */
+
+/* ── Two-column map layout ─────────────────────────────────── */
+.map-layout {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 14px;
+  height: calc(100vh - 140px);
+}
+
+/* ── Left: map wrapper (relative for overlays) ─────────────── */
+.map-main-wrap {
+  position: relative;
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+#vayu-map {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius);
+}
+
+/* ── AQI Legend overlay (bottom-left of map) ───────────────── */
+.map-legend {
+  position: absolute;
+  bottom: 28px;
+  left: 12px;
+  z-index: 900;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 13px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+  backdrop-filter: blur(12px);
+  min-width: 160px;
+}
+[data-theme="dark"] .map-legend {
+  background: rgba(10,14,26,0.92);
+}
+.map-legend-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+.map-legend-items {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.map-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.map-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 5px currentColor;
+}
+
+/* ── Layer controls (top-right of map) ────────────────────── */
+.map-layer-controls {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 900;
+  display: flex;
+  gap: 6px;
+}
+.map-layer-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  backdrop-filter: blur(10px);
+}
+[data-theme="dark"] .map-layer-btn {
+  background: rgba(10,14,26,0.85);
+}
+.map-layer-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--blue);
+}
+.map-layer-btn.active {
+  background: rgba(66,153,225,0.15);
+  border-color: rgba(66,153,225,0.45);
+  color: var(--blue-light);
+}
+
+/* ── Right: stats sidebar ─────────────────────────────────── */
+.map-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  box-shadow: var(--shadow-card);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+[data-theme="dark"] .map-sidebar {
+  background: rgba(255,255,255,0.03);
+}
+.map-sidebar-header {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.map-sidebar-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 14px 0;
+}
+
+/* ── Fleet stat mini-cards (2×2 grid) ────────────────────── */
+.map-stat-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+.map-stat-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  transition: var(--transition);
+}
+.map-stat-card:hover {
+  border-color: var(--blue);
+  transform: translateY(-1px);
+}
+.map-stat-label {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 5px;
+}
+.map-stat-value {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1;
+}
+.map-stat-value--sm {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+/* ── Sensor list rows ────────────────────────────────────── */
+.map-sensor-refresh-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--teal);
+  box-shadow: 0 0 6px var(--teal);
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.35; }
+}
+.map-sensor-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.map-sensor-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  cursor: pointer;
+  transition: var(--transition);
+}
+.map-sensor-row:hover,
+.map-sensor-row.active {
+  border-color: var(--blue);
+  background: var(--bg-card-hover);
+}
+.map-sensor-row.active {
+  box-shadow: 0 0 0 2px rgba(66,153,225,0.2);
+}
+.skeleton-row { cursor: default; }
+.map-sensor-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.map-sensor-dot--active      { background: #68d391; box-shadow: 0 0 6px #68d391; }
+.map-sensor-dot--inactive    { background: #718096; }
+.map-sensor-dot--maintenance { background: #ecc94b; box-shadow: 0 0 5px #ecc94b; }
+.map-sensor-info { flex: 1; min-width: 0; }
+.map-sensor-code {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.map-sensor-loc {
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.map-sensor-aqi-pill {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 20px;
+  border: 1px solid;
+  flex-shrink: 0;
+  min-width: 38px;
+  text-align: center;
+}
+
+/* ── Selected station info panel ─────────────────────────── */
+.map-info-panel {
+  flex: 1;
+}
+.map-info-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: center;
+  line-height: 1.5;
+}
+.map-info-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.map-info-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+.map-info-code {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.map-info-loc {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.map-info-aqi-wrap { text-align: right; }
+.map-info-aqi {
+  font-size: 26px;
+  font-weight: 900;
+  line-height: 1;
+}
+.map-info-cat {
+  font-size: 11px;
+  font-weight: 600;
+  margin-top: 2px;
+}
+.map-info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.map-info-metric {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.map-info-mkey {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.map-info-mval {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.map-info-munit {
+  font-size: 9px;
+  color: var(--text-muted);
+}
+.map-info-ts {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.map-info-btn {
+  width: 100%;
+  padding: 9px;
+  background: rgba(66,153,225,0.12);
+  border: 1px solid rgba(66,153,225,0.3);
+  border-radius: var(--radius-sm);
+  color: var(--blue-light);
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  margin-top: 2px;
+}
+.map-info-btn:hover {
+  background: rgba(66,153,225,0.25);
+}
+
+/* ── Responsive: stack on narrow screens ─────────────────── */
+@media (max-width: 900px) {
+  .map-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+    height: auto;
+  }
+  .map-main-wrap { height: 55vh; }
+  .map-sidebar   { max-height: 320px; }
+  .map-sensor-list { max-height: 120px; }
+}

@@ -372,7 +372,117 @@
 
     <!-- ── Map View ───────────────────────────────────────────── -->
     <div id="map-view-panel" style="display:none">
-      <div id="vayu-map" style="width:100%;height:calc(100vh - 140px);border-radius:12px;overflow:hidden"></div>
+      <div class="map-layout">
+
+        <!-- Left: map container -->
+        <div class="map-main-wrap">
+          <div id="vayu-map"></div>
+
+          <!-- AQI Legend overlay (bottom-left) -->
+          <div class="map-legend" id="map-legend">
+            <div class="map-legend-title">AQI Scale (CPCB)</div>
+            <div class="map-legend-items">
+              <div class="map-legend-item"><span class="map-legend-dot" style="background:#68d391"></span>Good (0–50)</div>
+              <div class="map-legend-item"><span class="map-legend-dot" style="background:#b7eb8f"></span>Satisfactory (51–100)</div>
+              <div class="map-legend-item"><span class="map-legend-dot" style="background:#f6e05e"></span>Moderate (101–200)</div>
+              <div class="map-legend-item"><span class="map-legend-dot" style="background:#ed8936"></span>Poor (201–300)</div>
+              <div class="map-legend-item"><span class="map-legend-dot" style="background:#fc8181"></span>Very Poor (301–400)</div>
+              <div class="map-legend-item"><span class="map-legend-dot" style="background:#e53e3e"></span>Severe (401+)</div>
+            </div>
+          </div>
+
+          <!-- Layer controls overlay (top-right of map) -->
+          <div class="map-layer-controls" id="map-layer-controls">
+            <button class="map-layer-btn active" id="map-layer-pins" onclick="mapToggleLayer('pins')" title="Show sensor pins">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              Pins
+            </button>
+            <button class="map-layer-btn active" id="map-layer-heatmap" onclick="mapToggleLayer('heatmap')" title="Show AQI heatmap">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+              Heatmap
+            </button>
+          </div>
+        </div>
+
+        <!-- Right: stats sidebar -->
+        <div class="map-sidebar">
+
+          <!-- Fleet summary cards -->
+          <div class="map-sidebar-header">Fleet Overview</div>
+          <div class="map-stat-cards" id="map-stat-cards">
+            <div class="map-stat-card">
+              <div class="map-stat-label">Active Sensors</div>
+              <div class="map-stat-value" id="ms-active">—</div>
+            </div>
+            <div class="map-stat-card">
+              <div class="map-stat-label">Fleet Avg AQI</div>
+              <div class="map-stat-value" id="ms-avg-aqi">—</div>
+            </div>
+            <div class="map-stat-card">
+              <div class="map-stat-label">Worst City</div>
+              <div class="map-stat-value map-stat-value--sm" id="ms-worst">—</div>
+            </div>
+            <div class="map-stat-card">
+              <div class="map-stat-label">Best City</div>
+              <div class="map-stat-value map-stat-value--sm" id="ms-best">—</div>
+            </div>
+          </div>
+
+          <!-- Divider -->
+          <div class="map-sidebar-divider"></div>
+
+          <!-- Sensor list -->
+          <div class="map-sidebar-header">Sensor Stations
+            <span class="map-sensor-refresh-dot" id="map-sensor-refresh-dot"></span>
+          </div>
+          <div class="map-sensor-list" id="map-sensor-list">
+            <!-- populated by map.js -->
+            <div class="map-sensor-row skeleton-row">
+              <div class="skeleton" style="width:8px;height:8px;border-radius:50%"></div>
+              <div style="flex:1">
+                <div class="skeleton" style="height:11px;width:70px;margin-bottom:4px"></div>
+                <div class="skeleton" style="height:9px;width:50px"></div>
+              </div>
+              <div class="skeleton" style="width:36px;height:22px;border-radius:6px"></div>
+            </div>
+          </div>
+
+          <!-- Divider -->
+          <div class="map-sidebar-divider"></div>
+
+          <!-- Click-to-select info panel -->
+          <div class="map-sidebar-header">Selected Station</div>
+          <div class="map-info-panel" id="map-info-panel">
+            <div class="map-info-empty" id="map-info-empty">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="28" height="28" style="opacity:.35"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              <span>Click a sensor pin<br>to see details here</span>
+            </div>
+            <div class="map-info-detail" id="map-info-detail" style="display:none">
+              <div class="map-info-top">
+                <div>
+                  <div class="map-info-code" id="mi-code">—</div>
+                  <div class="map-info-loc" id="mi-loc">—</div>
+                </div>
+                <div class="map-info-aqi-wrap">
+                  <div class="map-info-aqi" id="mi-aqi">—</div>
+                  <div class="map-info-cat" id="mi-cat">—</div>
+                </div>
+              </div>
+              <div class="map-info-grid">
+                <div class="map-info-metric"><span class="map-info-mkey">PM2.5</span><span class="map-info-mval" id="mi-pm25">—</span><span class="map-info-munit">µg/m³</span></div>
+                <div class="map-info-metric"><span class="map-info-mkey">PM10</span><span class="map-info-mval" id="mi-pm10">—</span><span class="map-info-munit">µg/m³</span></div>
+                <div class="map-info-metric"><span class="map-info-mkey">Temp</span><span class="map-info-mval" id="mi-temp">—</span><span class="map-info-munit">°C</span></div>
+                <div class="map-info-metric"><span class="map-info-mkey">Humidity</span><span class="map-info-mval" id="mi-hum">—</span><span class="map-info-munit">%</span></div>
+              </div>
+              <div class="map-info-ts" id="mi-ts"></div>
+              <button class="map-info-btn" onclick="window._mapViewDetails(window._mapInfoSensorId)">
+                View Full Dashboard →
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </div>
     </div>
 
   </main>
