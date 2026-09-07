@@ -1,0 +1,32 @@
+name: Scheduled Sensor Telemetry Simulation
+
+on:
+  schedule:
+    # Run every 10 minutes to stay within free-tier limits and keep Render warm
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  simulate:
+    name: Run Telemetry Simulator
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
+      - name: Run sensor simulator
+        env:
+          SIMULATOR_TOKEN: ${{ secrets.SIMULATOR_TOKEN }}
+        run: |
+          python simulate_sensors.py --url https://vayu-app.onrender.com --sensors 5 --duration 240 --interval 10
