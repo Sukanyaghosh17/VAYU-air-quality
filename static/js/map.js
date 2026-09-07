@@ -207,7 +207,10 @@ async function loadAndRenderSensors(force = false) {
   }
 
   try {
-    const resp = await fetch('/api/v1/sensors/map/', { credentials: 'same-origin' });
+    const resp = await fetch(`/api/v1/sensors/map/?_t=${Date.now()}`, {
+      credentials: 'same-origin',
+      cache: 'no-cache',
+    });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
     mapState.sensor_data     = data;

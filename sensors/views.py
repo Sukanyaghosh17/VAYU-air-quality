@@ -357,7 +357,7 @@ class LocationSearchView(APIView):
                 token = getattr(settings, "WAQI_API_TOKEN", "")
                 if not token:
                     detail = (
-                        f"No WAQI_API_TOKEN is configured. Set it in .env to enable public AQI data."
+                        "No WAQI_API_TOKEN is configured. Set it in .env to enable public AQI data."
                     )
                 else:
                     detail = f"No air quality data available for coordinates ({lat:.4f}, {lon:.4f})."
@@ -560,5 +560,8 @@ class SensorMapView(APIView):
                 "timestamp":    reading.timestamp.isoformat() if reading else None,
             })
 
-        return Response(results)
-
+        response = Response(results)
+        response["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
+        response["Pragma"] = "no-cache"
+        response["Expires"] = "0"
+        return response

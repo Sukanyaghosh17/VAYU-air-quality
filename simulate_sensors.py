@@ -74,6 +74,8 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 # ── Auto-load .env file if present ────────────────────────────────────────────
+
+
 def _load_env_file():
     env_path = Path(__file__).resolve().parent / ".env"
     if not env_path.exists():
@@ -89,9 +91,10 @@ def _load_env_file():
             if k and k not in os.environ:
                 os.environ[k] = v
 
+
 _load_env_file()
 
-import requests
+import requests  # noqa: E402
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -116,18 +119,18 @@ SIM_LOCATIONS = [
 
 # Baseline distributions: (mean, std, hard_min, hard_max)
 BASELINES = {
-    "pm25":        (15.0,  5.0,  0.0,   500.0),
-    "pm10":        (30.0, 10.0,  0.0,   600.0),
-    "temperature": (25.0,  3.0, -20.0,   60.0),
-    "humidity":    (55.0, 10.0,  0.0,   100.0),
+    "pm25":        (55.0, 15.0,  0.0,   500.0),
+    "pm10":        (95.0, 25.0,  0.0,   600.0),
+    "temperature": (28.0,  3.0, -20.0,   60.0),
+    "humidity":    (60.0, 10.0,  0.0,   100.0),
 }
 
 # Spike injection: callables that take the baseline sample and return spiked value
 SPIKE_FN = {
-    "pm25":        lambda v: v * random.uniform(6.0, 14.0),
-    "pm10":        lambda v: v * random.uniform(5.0, 12.0),
+    "pm25": lambda v: v * random.uniform(6.0, 14.0),
+    "pm10": lambda v: v * random.uniform(5.0, 12.0),
     "temperature": lambda v: v + random.uniform(10.0, 20.0),
-    "humidity":    lambda _: random.uniform(88.0, 99.0),
+    "humidity": lambda _: random.uniform(88.0, 99.0),
 }
 
 # ── Signal handling ────────────────────────────────────────────────────────────
@@ -266,7 +269,6 @@ def get_or_create_sensors(
         print(f"[simulator]   Created {code} at {loc} ({lat}, {lon}) (id={new['id']})")
 
     return existing[:target_count]
-
 
 
 # ── Main loop ─────────────────────────────────────────────────────────────────
