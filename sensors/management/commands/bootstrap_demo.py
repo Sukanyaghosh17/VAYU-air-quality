@@ -40,13 +40,15 @@ DEMO_LOCATIONS = [
     ("Hyderabad Hitech City",   17.4435, 78.3772),
 ]
 
-# Realistic baseline AQI values per city (µg/m³)
-_CITY_BASELINES = {
-    "Kolkata Park Street":    {"pm25": 65.0, "pm10": 110.0, "temperature": 30.0, "humidity": 72.0},
-    "Delhi Connaught Place":  {"pm25": 90.0, "pm10": 150.0, "temperature": 32.0, "humidity": 55.0},
-    "Mumbai Bandra":          {"pm25": 45.0, "pm10": 80.0,  "temperature": 29.0, "humidity": 78.0},
-    "Bengaluru Indiranagar":  {"pm25": 35.0, "pm10": 65.0,  "temperature": 25.0, "humidity": 60.0},
-    "Hyderabad Hitech City":  {"pm25": 50.0, "pm10": 90.0,  "temperature": 31.0, "humidity": 52.0},
+# Realistic baseline AQI values per sensor code (µg/m³)
+# Keyed by sensor_code (not location) so the lookup is stable regardless of
+# what location string was written to the DB by any previous bootstrap version.
+_SENSOR_BASELINES = {
+    "SIM-001": {"pm25": 65.0, "pm10": 110.0, "temperature": 30.0, "humidity": 72.0},  # Kolkata
+    "SIM-002": {"pm25": 90.0, "pm10": 150.0, "temperature": 32.0, "humidity": 55.0},  # Delhi
+    "SIM-003": {"pm25": 45.0, "pm10": 80.0,  "temperature": 29.0, "humidity": 78.0},  # Mumbai
+    "SIM-004": {"pm25": 35.0, "pm10": 65.0,  "temperature": 25.0, "humidity": 60.0},  # Bengaluru
+    "SIM-005": {"pm25": 50.0, "pm10": 90.0,  "temperature": 31.0, "humidity": 52.0},  # Hyderabad
 }
 
 # Seed 48 hourly readings; only insert when sensor has fewer than this many rows
@@ -63,22 +65,21 @@ def _noisy(base: float, pct: float = 0.15) -> float:
     return max(0.0, base * (1.0 + random.uniform(-pct, pct)))
 
 
-def _seed_readings(sensor: Sensor, num_hours: int = 48) -> int:
+def _seed_readings(sensor: Sensor, baselines: dict, num_hours: int = 48) -> int:
     """
-    Insert `num_hours` hourly SensorReading rows for `sensor` going back
-    from now.  Each reading uses a realistic sinusoidal diurnal pattern in
-    IST local time (UTC+5:30) so the modulation looks correct regardless of
-    the UTC time of deployment.
+    Insert `num_hours` hourly SensorReading rows for `sensor`.
 
-    The most recent reading (h=1) is always pinned near the city baseline
-    (without diurnal dampening) to guarantee a meaningful AQI in the fleet view.
+    `baselines` must be a dict with keys: pm25, pm10, temperature, humidity.
+    Keyed by sensor_code at the call site so the lookup is always correct.
+
+    Each reading uses a realistic sinusoidal diurnal pattern in IST local time
+    (UTC+5:30) so the modulation is realistic regardless of deployment timezone.
+    The most recent reading (h=1) is pinned to diurnal >= 1.0 (never below the
+    raw baseline). All readings are floored at 60% of the city baseline to
+    prevent sub-realistic PM values from a trough + negative noise combo.
 
     Returns the number of rows created.
     """
-    baselines = _CITY_BASELINES.get(sensor.location, {
-        "pm25": 50.0, "pm10": 90.0, "temperature": 28.0, "humidity": 65.0,
-    })
-
     now = timezone.now().replace(minute=0, second=0, microsecond=0)
     readings = []
     for h in range(num_hours, 0, -1):
@@ -214,10 +215,16 @@ class Command(BaseCommand):
         for sensor in sensors:
             current_count = SensorReading.objects.filter(sensor=sensor).count()
             if current_count < MIN_DEMO_READINGS:
-                seeded = _seed_readings(sensor, num_hours=48)
+                # Look up baseline by sensor_code — always stable regardless of
+                # what location string was saved by any previous bootstrap version.
+                bl = _SENSOR_BASELINES.get(sensor.sensor_code, {
+                    "pm25": 55.0, "pm10": 95.0, "temperature": 28.0, "humidity": 65.0,
+                })
+                seeded = _seed_readings(sensor, bl, num_hours=48)
                 total_seeded += seeded
                 self.stdout.write(
-                    f"  Seeded {seeded} hourly readings for {sensor.sensor_code} ({sensor.location})"
+                    f"  Seeded {seeded} readings for {sensor.sensor_code} "
+                    f"({sensor.location}) pm25_base={bl['pm25']}"
                 )
             else:
                 self.stdout.write(
