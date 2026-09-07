@@ -192,10 +192,19 @@ ALERT_COOLDOWN_SECONDS = 300
 # for internal VAYU sensors; external fallback will return a clear error).
 WAQI_API_TOKEN = env("WAQI_API_TOKEN", default="")
 
-# ── Cache (location search results cached 15 min) ─────────────────────────────
-# Uses in-process LocMemCache in dev — no external Redis/memcached needed.
-# In production swap CACHE_BACKEND to 'django.core.cache.backends.redis.RedisCache'
-# and set CACHE_LOCATION to your Redis URL.
+# ── Cache (location search results cached 15 min, DRF throttle counters) ───────
+# Default: in-process LocMemCache.
+# Production single-worker rationale:
+#   In production on Render free tier (see render.yaml), gunicorn runs with 1 worker
+#   process to fit within the 512MB free RAM limit. Because there is only a single
+#   worker process handling requests, LocMemCache is intentionally per-worker and
+#   completely consistent across requests, avoiding the need and cost of an external
+#   Redis instance.
+# Horizontal scaling:
+#   If scaling to multiple gunicorn workers or multiple web instances, configure
+#   an external Redis instance and set:
+#     CACHE_BACKEND=django.core.cache.backends.redis.RedisCache
+#     CACHE_LOCATION=redis://<host>:<port>/1
 CACHES = {
     "default": {
         "BACKEND": env(
