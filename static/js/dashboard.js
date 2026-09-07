@@ -218,7 +218,29 @@ function renderSidebar(sensors) {
     list.innerHTML = '<div class="sensor-item"><span class="text-muted" style="font-size:12px">No sensors yet</span></div>';
     return;
   }
-  list.innerHTML = sensors.map(s => `
+  list.innerHTML = sensors.map(s => {
+    let aqi = s.aqi ?? null;
+    let cat = s.aqi_category ?? null;
+
+    // Fallback: look up in state.latestReadings if not on sensor object
+    if (aqi == null && state.latestReadings?.length) {
+      const match = state.latestReadings.find(r => (r.sensor === s.id || r.sensor_id === s.id));
+      if (match) {
+        const p25 = match.pm25 != null ? pm25AqiCpcb(parseFloat(match.pm25)) : null;
+        const p10 = match.pm10 != null ? pm10AqiCpcb(parseFloat(match.pm10)) : null;
+        if (p25 || p10) {
+          const v25 = match.pm25 != null ? (match.pm25 <= 30 ? Math.round((50 / 30) * match.pm25) : Math.round(50 + ((match.pm25 - 30) / 30) * 50)) : 0;
+          const v10 = match.pm10 != null ? (match.pm10 <= 50 ? Math.round(match.pm10) : Math.round(50 + ((match.pm10 - 50) / 50) * 50)) : 0;
+          aqi = Math.max(v25, v10);
+          cat = (v25 >= v10 ? p25?.label : p10?.label) ?? 'Good';
+        }
+      }
+    }
+
+    const aqiVal = aqi != null ? aqi : '—';
+    const color = cat ? aqiColor(cat) : '#94a3b8';
+
+    return `
     <div class="sensor-item ${state.selectedSensorId === s.id ? 'active' : ''}"
          data-id="${s.id}" onclick="selectSensor(${s.id})">
       <div class="sensor-status-dot ${s.status}"></div>
@@ -226,8 +248,9 @@ function renderSidebar(sensors) {
         <div class="sensor-code">${s.sensor_code}</div>
         <div class="sensor-loc">${s.location}</div>
       </div>
-      <div class="sensor-aqi-badge">${s.reading_count ?? '—'}</div>
-    </div>`).join('');
+      <div class="sensor-aqi-badge" style="color:${color};background:${color}18;border-color:${color}40">${aqiVal}</div>
+    </div>`;
+  }).join('');
 
   // Update active node pill in header
   const active = sensors.find(s => s.id === state.selectedSensorId);
@@ -446,6 +469,9 @@ async function refreshReadings() {
     const data = await apiGetAll(url);
     state.latestReadings = data;
     renderStatCards(data);
+    if (state.sensors?.length) {
+      renderSidebar(state.sensors);
+    }
   } catch (e) { console.warn('Readings refresh failed:', e); }
 }
 
@@ -463,7 +489,7 @@ async function refreshCharts() {
 
 async function refreshSensors() {
   try {
-    const data = await apiGetAll('/api/v1/sensors/?page_size=100');
+    const data = await apiGetAll(`/api/v1/sensors/?page_size=100&_t=${Date.now()}`);
     state.sensors = data;
     renderSidebar(data);
   } catch (e) { console.warn('Sensor list failed:', e); }

@@ -21,12 +21,15 @@ SensorReadingSerializer read path:
 
 from rest_framework import serializers
 
+from .aqi import compute_aqi
 from .models import Sensor, SensorReading
 
 
 class SensorSerializer(serializers.ModelSerializer):
     # Annotated by the viewset queryset; read-only computed field.
     reading_count = serializers.IntegerField(read_only=True, default=0)
+    aqi = serializers.SerializerMethodField()
+    aqi_category = serializers.SerializerMethodField()
 
     class Meta:
         model = Sensor
@@ -39,9 +42,29 @@ class SensorSerializer(serializers.ModelSerializer):
             "status",
             "installed_at",
             "reading_count",
+            "aqi",
+            "aqi_category",
         ]
         read_only_fields = ["id"]
 
+    def _get_latest_reading(self, obj):
+        if not hasattr(self, "_reading_cache"):
+            self._reading_cache = {}
+        if obj.pk not in self._reading_cache:
+            self._reading_cache[obj.pk] = obj.readings.order_by("-timestamp").first()
+        return self._reading_cache[obj.pk]
+
+    def get_aqi(self, obj) -> int | None:
+        r = self._get_latest_reading(obj)
+        if not r:
+            return None
+        return compute_aqi(r.pm25, r.pm10)["aqi"]
+
+    def get_aqi_category(self, obj) -> str:
+        r = self._get_latest_reading(obj)
+        if not r:
+            return "N/A"
+        return compute_aqi(r.pm25, r.pm10)["category"]
 
 
 class SensorReadingSerializer(serializers.ModelSerializer):
