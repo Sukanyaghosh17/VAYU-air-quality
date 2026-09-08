@@ -1,0 +1,42 @@
+name: Scheduled Live WAQI Data Sync
+
+on:
+  schedule:
+    # WAQI external feed cache TTL is 15 minutes.
+    # Scheduled every 20 minutes to guarantee fresh monitoring station telemetry
+    # without thrashing cache or exceeding WAQI API rate quotas.
+    - cron: "*/20 * * * *"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    name: Sync Live WAQI Feed
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Live Sensor Sync
+        env:
+          # Prefer dedicated LIVE_SYNC_TOKEN, falling back to SIMULATOR_TOKEN if not explicitly configured
+          SYNC_TOKEN: ${{ secrets.LIVE_SYNC_TOKEN || secrets.SIMULATOR_TOKEN }}
+        run: |
+          if [ -z "$SYNC_TOKEN" ]; then
+            echo "::error::Neither LIVE_SYNC_TOKEN nor SIMULATOR_TOKEN secret is configured in GitHub repository secrets."
+            exit 1
+          fi
+
+          echo "Triggering live sensor sync on https://vayu-app.onrender.com/api/v1/sensors/sync-live/..."
+          HTTP_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
+            -X POST "https://vayu-app.onrender.com/api/v1/sensors/sync-live/" \
+            -H "Authorization: Token ${SYNC_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --max-time 30)
+
+          BODY=$(echo "$HTTP_RESPONSE" | sed -e '$d')
+          STATUS=$(echo "$HTTP_RESPONSE" | tail -n 1 | cut -d: -f2)
+
+          echo "HTTP Status: $STATUS"
+          echo "Response Body: $BODY"
+
+          if [ "$STATUS" -ne 200 ]; then
+            echo "::error::Live sync endpoint failed with HTTP $STATUS"
+            exit 1
+          fi
