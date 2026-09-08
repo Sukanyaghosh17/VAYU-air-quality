@@ -185,6 +185,11 @@ class Command(BaseCommand):
                     "installed_at": today,
                 },
             )
+            if not s_created and (sensor.latitude != lat or sensor.longitude != lon or sensor.location != loc):
+                sensor.latitude = lat
+                sensor.longitude = lon
+                sensor.location = loc
+                sensor.save(update_fields=["latitude", "longitude", "location"])
             sensors.append(sensor)
             if s_created:
                 created_count += 1

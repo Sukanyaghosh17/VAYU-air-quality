@@ -122,13 +122,17 @@ The platform includes a multi-featured simulator (`simulate_sensors.py`) to stre
 Run the idempotent `bootstrap_demo` command to initialize the dedicated `simulator` service account (scoped with `role='service'` and `can_provision_sensors`), pre-create 5 demo sensors, and output its authentication token:
 
 ```bash
+# Initialize demo sensors, service account, and 48 hours of demo readings:
 python manage.py bootstrap_demo
+
+# (Optional) Wipe existing readings and re-seed from scratch:
+python manage.py bootstrap_demo --force-reseed
 ```
 
 Output:
 ```text
 SIMULATOR_TOKEN=c2d595b1c8c4963cbf5f83e835f24152617545f3
-[bootstrap_demo] Completed: 5 sensors created, 0 existing sensors preserved.
+[bootstrap_demo] Sensors: 5 created, 0 existing preserved.
 ```
 
 Copy the output token and paste it into `.env` as `SIMULATOR_TOKEN=<token>`.
@@ -152,21 +156,25 @@ python simulate_sensors.py --sensors 3 --duration 60
 #### Simulator Telemetry Baseline:
 | Parameter | Baseline Range | Anomaly Spike Range | Unit |
 |---|---|---|---|
-| **PM2.5** | 15 ± 5 | 90 – 210 | µg/m³ |
-| **PM10** | 30 ± 10 | 150 – 360 | µg/m³ |
-| **Temperature** | 25 ± 3 | 35 – 45 | °C |
-| **Humidity** | 55 ± 10 | 88 – 99 | % |
+| **PM2.5** | 35 – 90 (city-calibrated) | 210 – 600+ | µg/m³ |
+| **PM10** | 65 – 150 (city-calibrated) | 350 – 800+ | µg/m³ |
+| **Temperature** | 25 – 32 | 35 – 45 | °C |
+| **Humidity** | 50 – 80 | 88 – 99 | % |
 
 ### ☁️ Keeping the Render Free Deployment Populated
 
 On Render's Free tier, Background Workers and Cron Jobs are not supported (only web services and Key Value offer free compute plans). Because of this, a scheduled GitHub Actions workflow (`.github/workflows/simulate.yml`) is used to periodically feed telemetry into the deployed application at zero cost:
 
 1. **Automatic Provisioning via `build.sh`**:
-   Whenever the application deploys on Render, `build.sh` automatically runs `python manage.py bootstrap_demo` right after `migrate`. It ensures the `simulator` service account, DRF auth token, and 5 demo sensors exist in PostgreSQL without duplicates.
+   Whenever the application deploys on Render, `build.sh` automatically runs `python manage.py bootstrap_demo --force-reseed` right after `migrate`. It ensures the `simulator` service account, DRF auth token, 5 demo sensors, and 48 hours of realistic diurnal baseline readings exist in PostgreSQL without duplicates.
 2. **Configure GitHub Actions Secret**:
    - Check the Render deploy logs (or run `python manage.py bootstrap_demo` locally connected to `DATABASE_URL`, or in Render's SSH shell) to view the printed `SIMULATOR_TOKEN=<key>`.
    - In your GitHub repository, navigate to **Settings → Secrets and variables → Actions**.
    - Create a repository secret named `SIMULATOR_TOKEN` and paste the token key.
+
+   > [!IMPORTANT]
+   > **Without this step, the live dashboard will show "no data found" indefinitely** — the GitHub Actions simulator will run on schedule but silently fail with `No API token found` if this secret isn't set. This is not optional.
+
 3. **Automated Bursts**:
    - The workflow runs automatically every 10 minutes (`*/10 * * * *`) and runs a 4-minute simulation burst (`--duration 240 --interval 10`). You can also trigger it manually anytime via **Actions → Run Telemetry Simulator → Run workflow** (`workflow_dispatch`).
    - *Free-tier characteristics*: The dashboard displays data in periodic waves rather than a nonstop stream. Furthermore, Render free web services spin down after 15 minutes of inactivity; a burst every 10 minutes helps keep the service warm, though the first request in a burst after a spin-down may experience a slight cold-start latency. Continuous background workers provide smoother streaming but require a paid Render plan.
@@ -196,14 +204,14 @@ All API routes are served under `/api/v1/`:
 ### Sensors & Readings
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/api/v1/sensors/` | List all sensors with reading counts |
-| `POST` | `/api/v1/sensors/` | Create a new sensor (Admin only) |
+| `GET` | `/api/v1/sensors/` | List all sensors with reading counts, live AQI, and CPCB category |
+| `POST` | `/api/v1/sensors/` | Create a new sensor (Admin or authorized service account) |
 | `GET` | `/api/v1/sensors/<id>/` | Retrieve details for a specific sensor |
 | `GET` | `/api/v1/sensors/search/?location=<city>` | Search sensor stations or external WAQI stations |
 | `GET` | `/api/v1/sensors/search/?lat=<lat>&lon=<lon>` | Coordinate-based nearest AQI search |
 | `GET` | `/api/v1/sensors/map/` | Geocoded sensors with latest AQI status for map view |
 | `GET` | `/api/v1/readings/` | Paginated raw readings feed |
-| `POST` | `/api/v1/readings/` | Ingest new sensor reading |
+| `POST` | `/api/v1/readings/` | Ingest new sensor reading (Authenticated only) |
 | `GET` | `/api/v1/readings/latest/` | Most recent reading for every sensor |
 | `GET` | `/api/v1/readings/history/?sensor=<id>&range=24h\|7d\|30d` | Time-bucketed averages for trends |
 
@@ -249,7 +257,7 @@ VAYU - air - Quality/
 Execute the automated test suite covering all modules:
 
 ```bash
-python manage.py test
+python manage.py test --settings=vayu.settings_test
 ```
 
 ---

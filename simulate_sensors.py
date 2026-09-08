@@ -25,7 +25,7 @@ Options
     --token         API token for the simulator user.
                     Falls back to SIMULATOR_TOKEN env var.
     --sensors N     Number of sensors to simulate. If fewer active sensors exist
-                    in the DB, new ones are created automatically. (default: 3)
+                    in the DB, new ones are created automatically. (default: 5)
     --sensor-ids    Comma-separated list of specific sensor IDs to simulate.
                     Overrides --sensors.
     --interval SEC  Seconds between reading batches. (default: 3)
@@ -117,7 +117,17 @@ SIM_LOCATIONS = [
 ]
 
 
-# Baseline distributions: (mean, std, hard_min, hard_max)
+# Realistic baseline distributions per sensor/city: (mean, std)
+# Keyed by sensor_code with location fallback matching bootstrap_demo.py
+CITY_BASELINES = {
+    "SIM-001": {"pm25": (65.0, 10.0), "pm10": (110.0, 20.0), "temperature": (30.0, 2.0), "humidity": (72.0, 5.0)},  # Kolkata
+    "SIM-002": {"pm25": (90.0, 15.0), "pm10": (150.0, 25.0), "temperature": (32.0, 2.0), "humidity": (55.0, 5.0)},  # Delhi
+    "SIM-003": {"pm25": (45.0,  8.0), "pm10": (80.0,  15.0), "temperature": (29.0, 2.0), "humidity": (78.0, 5.0)},  # Mumbai
+    "SIM-004": {"pm25": (35.0,  6.0), "pm10": (65.0,  12.0), "temperature": (25.0, 2.0), "humidity": (60.0, 5.0)},  # Bengaluru
+    "SIM-005": {"pm25": (50.0,  9.0), "pm10": (90.0,  18.0), "temperature": (31.0, 2.0), "humidity": (52.0, 5.0)},  # Hyderabad
+}
+
+# Fallback default baseline distributions: (mean, std, hard_min, hard_max)
 BASELINES = {
     "pm25":        (55.0, 15.0,  0.0,   500.0),
     "pm10":        (95.0, 25.0,  0.0,   600.0),
@@ -149,16 +159,30 @@ signal.signal(signal.SIGINT, _handle_sigint)
 # ── Data generation ────────────────────────────────────────────────────────────
 
 
-def generate_reading(spike_rate: float) -> dict:
+def generate_reading(spike_rate: float, sensor: dict | None = None) -> dict:
     """
     Generate one set of air-quality measurements.
 
-    Each parameter is sampled independently, so a single reading can have
-    any combination of normal / spiked values.  This produces realistic
-    partial-anomaly scenarios for testing the alert engine and ML scorer.
+    Each parameter is sampled independently from sensor-specific or city baselines,
+    so a single reading can have any combination of normal / spiked values.
     """
     reading = {}
-    for param, (mean, std, hard_min, hard_max) in BASELINES.items():
+    code = sensor.get("sensor_code", "") if sensor else ""
+    loc = sensor.get("location", "").lower() if sensor else ""
+
+    city_dist = CITY_BASELINES.get(code)
+    if not city_dist and loc:
+        for c_key, dist in CITY_BASELINES.items():
+            if c_key.lower() in loc:
+                city_dist = dist
+                break
+
+    for param, (default_mean, default_std, hard_min, hard_max) in BASELINES.items():
+        if city_dist and param in city_dist:
+            mean, std = city_dist[param]
+        else:
+            mean, std = default_mean, default_std
+
         # Sample from Gaussian baseline
         value = float(random.gauss(mean, std))
         # Inject spike with probability spike_rate
@@ -280,7 +304,7 @@ def run(args: argparse.Namespace) -> None:
         print(
             "[simulator] ERROR: No API token found.\n"
             "  Pass --token <key>  or  set SIMULATOR_TOKEN in .env\n"
-            "  See README.md § Token Auth / Simulator User for setup steps."
+            "  See README.md § Running the IoT Sensor Simulator -> Step 1 for setup steps."
         )
         sys.exit(1)
 
@@ -330,7 +354,7 @@ def run(args: argparse.Namespace) -> None:
         spike_count = 0
 
         for sensor in sensors:
-            reading = generate_reading(args.spike_rate)
+            reading = generate_reading(args.spike_rate, sensor=sensor)
             is_spike = any(
                 reading[p] > BASELINES[p][0] * 3  # >3× baseline mean = spike indicator
                 for p in ("pm25", "pm10")
