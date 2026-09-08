@@ -114,15 +114,32 @@ Open your browser and navigate to:
 
 ---
 
+## 🌐 Live Feeds vs. Simulated Demo Data
+
+To provide a complete demonstration out-of-the-box while also supporting real-world telemetry, VAYU clearly distinguishes between two categories of sensors:
+
+| Label | Data Source | Behavior & Refresh |
+|---|---|---|
+| **DEMO** | Synthetic Simulation | Sensors `SIM-001` through `SIM-005` generate realistic Gaussian telemetry via `simulate_sensors.py` and initial seed data. Designed to test alerting, threshold violations, and ML anomaly detection without consuming third-party API quotas. |
+| **LIVE** | World Air Quality Index (WAQI) | Sensor `LIVE-DEL` ("New Delhi (Live — via WAQI)") ingests official telemetry from nearby government and public monitoring stations via the WAQI API. Synced every 20 minutes via GitHub Actions. |
+
+> [!NOTE]
+> **Comparing Live Readings with external portals (e.g. aqi.in)**:
+> Even live sensors may show slight variations when compared directly against sites like [aqi.in](https://www.aqi.in). This is **expected and not a bug**:
+> 1. **Station Proximity**: The WAQI API selects the nearest reporting monitoring station with active sensors relative to the specified coordinates (e.g., US Embassy vs. Anand Vihar in Delhi).
+> 2. **Refresh Cycles**: Monitoring stations publish data on varying hourly schedules, and VAYU applies a 15-minute cache TTL (`CACHE_TTL`) to avoid excessive quota consumption.
+
+---
+
 ## 🧪 Running the IoT Sensor Simulator
 
 The platform includes a multi-featured simulator (`simulate_sensors.py`) to stream realistic air-quality telemetry directly into the ingest API.
 
 ### Step 1: Provision Simulator Service Account & API Token
-Run the idempotent `bootstrap_demo` command to initialize the dedicated `simulator` service account (scoped with `role='service'` and `can_provision_sensors`), pre-create 5 demo sensors, and output its authentication token:
+Run the idempotent `bootstrap_demo` command to initialize the dedicated `simulator` service account (scoped with `role='service'` and `can_provision_sensors`), pre-create 5 demo sensors, provision the live sensor (`LIVE-DEL`), and output its authentication token:
 
 ```bash
-# Initialize demo sensors, service account, and 48 hours of demo readings:
+# Initialize demo sensors, live sensor, service account, and 48 hours of demo readings:
 python manage.py bootstrap_demo
 
 # (Optional) Wipe existing readings and re-seed from scratch:
@@ -133,6 +150,7 @@ Output:
 ```text
 SIMULATOR_TOKEN=c2d595b1c8c4963cbf5f83e835f24152617545f3
 [bootstrap_demo] Sensors: 5 created, 0 existing preserved.
+[bootstrap_demo] Live sensor LIVE-DEL (New Delhi (Live — via WAQI)): created.
 ```
 
 Copy the output token and paste it into `.env` as `SIMULATOR_TOKEN=<token>`.
@@ -163,21 +181,22 @@ python simulate_sensors.py --sensors 3 --duration 60
 
 ### ☁️ Keeping the Render Free Deployment Populated
 
-On Render's Free tier, Background Workers and Cron Jobs are not supported (only web services and Key Value offer free compute plans). Because of this, a scheduled GitHub Actions workflow (`.github/workflows/simulate.yml`) is used to periodically feed telemetry into the deployed application at zero cost:
+On Render's Free tier, Background Workers and Cron Jobs are not supported (only web services and Key Value offer free compute plans). Because of this, scheduled GitHub Actions workflows periodically feed and synchronize telemetry into the deployed application at zero cost:
 
 1. **Automatic Provisioning via `build.sh`**:
-   Whenever the application deploys on Render, `build.sh` automatically runs `python manage.py bootstrap_demo --force-reseed` right after `migrate`. It ensures the `simulator` service account, DRF auth token, 5 demo sensors, and 48 hours of realistic diurnal baseline readings exist in PostgreSQL without duplicates.
-2. **Configure GitHub Actions Secret**:
+   Whenever the application deploys on Render, `build.sh` automatically runs `python manage.py bootstrap_demo --force-reseed` right after `migrate`. It ensures the `simulator` service account, DRF auth token, 5 demo sensors, the live `LIVE-DEL` sensor, and 48 hours of realistic diurnal baseline readings exist in PostgreSQL without duplicates.
+2. **Configure GitHub Actions Secrets**:
    - Check the Render deploy logs (or run `python manage.py bootstrap_demo` locally connected to `DATABASE_URL`, or in Render's SSH shell) to view the printed `SIMULATOR_TOKEN=<key>`.
    - In your GitHub repository, navigate to **Settings → Secrets and variables → Actions**.
    - Create a repository secret named `SIMULATOR_TOKEN` and paste the token key.
+   - *(Optional Dedicated Token)*: You may optionally configure `LIVE_SYNC_TOKEN` pointing to a dedicated service account for the WAQI sync workflow. If omitted, `.github/workflows/sync_live_aqi.yml` automatically falls back to `SIMULATOR_TOKEN` (which already has scoped `role='service'` permissions).
 
    > [!IMPORTANT]
-   > **Without this step, the live dashboard will show "no data found" indefinitely** — the GitHub Actions simulator will run on schedule but silently fail with `No API token found` if this secret isn't set. This is not optional.
+   > **Without this step, scheduled automation will fail** — the GitHub Actions workflows require `SIMULATOR_TOKEN` (or `LIVE_SYNC_TOKEN`) to authenticate against the ingest and sync endpoints.
 
-3. **Automated Bursts**:
-   - The workflow runs automatically every 10 minutes (`*/10 * * * *`) and runs a 4-minute simulation burst (`--duration 240 --interval 10`). You can also trigger it manually anytime via **Actions → Run Telemetry Simulator → Run workflow** (`workflow_dispatch`).
-   - *Free-tier characteristics*: The dashboard displays data in periodic waves rather than a nonstop stream. Furthermore, Render free web services spin down after 15 minutes of inactivity; a burst every 10 minutes helps keep the service warm, though the first request in a burst after a spin-down may experience a slight cold-start latency. Continuous background workers provide smoother streaming but require a paid Render plan.
+3. **Scheduled Workflows**:
+   - **Telemetry Simulator** (`.github/workflows/simulate.yml`): Runs every 10 minutes (`*/10 * * * *`) for 4-minute bursts, keeping the free Render web service warm and generating demo sensor activity.
+   - **Live WAQI Sync** (`.github/workflows/sync_live_aqi.yml`): Runs every 20 minutes (`*/20 * * * *`) to fetch fresh official station telemetry for live sensors. The 20-minute interval respects the WAQI 15-minute cache TTL (`CACHE_TTL = 60 * 15`), ensuring fresh data without wasted API calls.
 
 ---
 
@@ -204,9 +223,10 @@ All API routes are served under `/api/v1/`:
 ### Sensors & Readings
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/api/v1/sensors/` | List all sensors with reading counts, live AQI, and CPCB category |
+| `GET` | `/api/v1/sensors/` | List all sensors with reading counts, live AQI, CPCB category, and `data_source` |
 | `POST` | `/api/v1/sensors/` | Create a new sensor (Admin or authorized service account) |
 | `GET` | `/api/v1/sensors/<id>/` | Retrieve details for a specific sensor |
+| `POST` | `/api/v1/sensors/sync-live/` | Synchronize live sensors with WAQI monitoring feeds (Admin or service account) |
 | `GET` | `/api/v1/sensors/search/?location=<city>` | Search sensor stations or external WAQI stations |
 | `GET` | `/api/v1/sensors/search/?lat=<lat>&lon=<lon>` | Coordinate-based nearest AQI search |
 | `GET` | `/api/v1/sensors/map/` | Geocoded sensors with latest AQI status for map view |
