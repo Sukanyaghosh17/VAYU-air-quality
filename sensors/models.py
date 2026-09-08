@@ -37,6 +37,13 @@ class Sensor(models.Model):
         (STATUS_MAINTENANCE, "Maintenance"),
     ]
 
+    DATA_SOURCE_SIMULATED = "simulated"
+    DATA_SOURCE_LIVE = "live"
+    DATA_SOURCE_CHOICES = [
+        (DATA_SOURCE_SIMULATED, "Simulated Demo Data"),
+        (DATA_SOURCE_LIVE, "Live WAQI Feed"),
+    ]
+
     sensor_code = models.CharField(
         max_length=50,
         unique=True,
@@ -44,6 +51,12 @@ class Sensor(models.Model):
     )
     location = models.CharField(max_length=200, help_text="Physical location description.")
     status = models.CharField(max_length=15, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
+    data_source = models.CharField(
+        max_length=20,
+        choices=DATA_SOURCE_CHOICES,
+        default=DATA_SOURCE_SIMULATED,
+        help_text="Origin of telemetry data ('simulated' or 'live').",
+    )
     installed_at = models.DateField(help_text="Date the sensor was physically deployed.")
     # Optional geocoordinates — null means "not yet geocoded".
     # Stored as plain floats rather than a spatial type to avoid requiring

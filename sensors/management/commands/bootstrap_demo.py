@@ -182,14 +182,26 @@ class Command(BaseCommand):
                     "latitude": lat,
                     "longitude": lon,
                     "status": Sensor.STATUS_ACTIVE,
+                    "data_source": Sensor.DATA_SOURCE_SIMULATED,
                     "installed_at": today,
                 },
             )
-            if not s_created and (sensor.latitude != lat or sensor.longitude != lon or sensor.location != loc):
+            update_fields = []
+            if sensor.latitude != lat:
                 sensor.latitude = lat
+                update_fields.append("latitude")
+            if sensor.longitude != lon:
                 sensor.longitude = lon
+                update_fields.append("longitude")
+            if sensor.location != loc:
                 sensor.location = loc
-                sensor.save(update_fields=["latitude", "longitude", "location"])
+                update_fields.append("location")
+            if sensor.data_source != Sensor.DATA_SOURCE_SIMULATED:
+                sensor.data_source = Sensor.DATA_SOURCE_SIMULATED
+                update_fields.append("data_source")
+            if update_fields:
+                sensor.save(update_fields=update_fields)
+
             sensors.append(sensor)
             if s_created:
                 created_count += 1
@@ -200,6 +212,45 @@ class Command(BaseCommand):
             self.style.SUCCESS(
                 f"[bootstrap_demo] Sensors: {created_count} created, "
                 f"{existing_count} existing preserved."
+            )
+        )
+
+        # 3b. Provision live WAQI sensor (LIVE-DEL) — distinct from synthetic SIM-002
+        live_code = "LIVE-DEL"
+        live_loc = "New Delhi (Live — via WAQI)"
+        live_lat = 28.6315
+        live_lon = 77.2167
+        live_sensor, l_created = Sensor.objects.get_or_create(
+            sensor_code=live_code,
+            defaults={
+                "location": live_loc,
+                "latitude": live_lat,
+                "longitude": live_lon,
+                "status": Sensor.STATUS_ACTIVE,
+                "data_source": Sensor.DATA_SOURCE_LIVE,
+                "installed_at": today,
+            },
+        )
+        l_update_fields = []
+        if live_sensor.latitude != live_lat:
+            live_sensor.latitude = live_lat
+            l_update_fields.append("latitude")
+        if live_sensor.longitude != live_lon:
+            live_sensor.longitude = live_lon
+            l_update_fields.append("longitude")
+        if live_sensor.location != live_loc:
+            live_sensor.location = live_loc
+            l_update_fields.append("location")
+        if live_sensor.data_source != Sensor.DATA_SOURCE_LIVE:
+            live_sensor.data_source = Sensor.DATA_SOURCE_LIVE
+            l_update_fields.append("data_source")
+        if l_update_fields:
+            live_sensor.save(update_fields=l_update_fields)
+
+        l_msg = "created" if l_created else "preserved/updated"
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"[bootstrap_demo] Live sensor {live_code} ({live_loc}): {l_msg}."
             )
         )
 

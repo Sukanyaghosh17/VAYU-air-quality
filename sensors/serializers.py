@@ -40,6 +40,7 @@ class SensorSerializer(serializers.ModelSerializer):
             "latitude",
             "longitude",
             "status",
+            "data_source",
             "installed_at",
             "reading_count",
             "aqi",
@@ -68,8 +69,9 @@ class SensorSerializer(serializers.ModelSerializer):
 
 
 class SensorReadingSerializer(serializers.ModelSerializer):
-    # Convenience read-only field — avoids a second round-trip in the frontend.
+    # Convenience read-only fields — avoids extra round-trips in the frontend.
     sensor_code = serializers.CharField(source="sensor.sensor_code", read_only=True)
+    data_source = serializers.CharField(source="sensor.data_source", read_only=True)
 
     class Meta:
         model = SensorReading
@@ -77,13 +79,14 @@ class SensorReadingSerializer(serializers.ModelSerializer):
             "id",
             "sensor",
             "sensor_code",
+            "data_source",
             "pm25",
             "pm10",
             "temperature",
             "humidity",
             "timestamp",
         ]
-        read_only_fields = ["id", "sensor_code"]
+        read_only_fields = ["id", "sensor_code", "data_source"]
         extra_kwargs = {
             # sensor is write-only on input (client sends sensor id);
             # sensor_code is the human-readable equivalent on output.
