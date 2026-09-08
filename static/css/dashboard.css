@@ -1439,3 +1439,45 @@ body {
   .map-sidebar   { max-height: 320px; }
   .map-sensor-list { max-height: 120px; }
 }
+
+/* ============================================================
+   DATA SOURCE BADGES — LIVE WAQI vs DEMO SIMULATED
+   ============================================================ */
+.source-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  line-height: 1.3;
+  vertical-align: middle;
+  text-transform: uppercase;
+  margin-left: 5px;
+}
+
+.source-tag.live {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.45);
+}
+
+.source-tag.demo {
+  background: rgba(148, 163, 184, 0.15);
+  color: var(--text-muted, #94a3b8);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+}
+
+.map-popup-badge--live {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+.source-badge-live {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+}
+

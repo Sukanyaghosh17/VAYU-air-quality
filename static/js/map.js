@@ -113,6 +113,9 @@ function sensorPopupHtml(s) {
   const hum   = s.humidity   != null ? parseFloat(s.humidity).toFixed(1)   : '—';
   const ts    = s.timestamp  ? new Date(s.timestamp).toLocaleString()   : '—';
   const dot   = `<span class="map-status-dot map-status-dot--${s.status}"></span>`;
+  const isLive = s.data_source === 'live';
+  const badgeClass = isLive ? 'map-popup-badge--live' : 'map-popup-badge--vayu';
+  const badgeText = isLive ? 'Live WAQI Feed' : 'Simulated Demo';
 
   return `
     <div class="vayu-map-popup">
@@ -121,7 +124,7 @@ function sensorPopupHtml(s) {
           <div class="map-popup-code">${dot}${s.sensor_code}</div>
           <div class="map-popup-loc">${s.location}</div>
         </div>
-        <span class="map-popup-badge map-popup-badge--vayu">VAYU Sensor</span>
+        <span class="map-popup-badge ${badgeClass}">${badgeText}</span>
       </div>
       <div class="map-popup-aqi" style="color:${color}">
         AQI <strong>${aqi}</strong>
@@ -367,12 +370,16 @@ function renderSensorList(sensors) {
   list.innerHTML = sensors.map(s => {
     const color = mapAqiColor(s.aqi_category);
     const aqi   = s.aqi ?? '—';
+    const isLive = s.data_source === 'live';
+    const tagHtml = isLive
+      ? `<span class="source-tag live">LIVE</span>`
+      : `<span class="source-tag demo">DEMO</span>`;
     return `
       <div class="map-sensor-row" data-sensor-id="${s.id}"
            onclick="mapSidebarSelectSensor(${s.id})">
         <span class="map-sensor-dot map-sensor-dot--${s.status}"></span>
         <div class="map-sensor-info">
-          <div class="map-sensor-code">${s.sensor_code}</div>
+          <div class="map-sensor-code">${s.sensor_code}${tagHtml}</div>
           <div class="map-sensor-loc">${s.location}</div>
         </div>
         <span class="map-sensor-aqi-pill"
@@ -401,7 +408,8 @@ function showMapInfoPanel(s) {
   document.getElementById('map-info-detail').style.display = '';
 
   const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-  set('mi-code', s.sensor_code);
+  const tag = s.data_source === 'live' ? ' [LIVE]' : ' [DEMO]';
+  set('mi-code', `${s.sensor_code}${tag}`);
   set('mi-loc',  s.location);
   set('mi-aqi',  s.aqi ?? '—');
   set('mi-cat',  s.aqi_category ?? 'N/A');

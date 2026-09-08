@@ -239,13 +239,17 @@ function renderSidebar(sensors) {
 
     const aqiVal = aqi != null ? aqi : '—';
     const color = cat ? aqiColor(cat) : '#94a3b8';
+    const isLive = s.data_source === 'live';
+    const tagHtml = isLive
+      ? `<span class="source-tag live">LIVE</span>`
+      : `<span class="source-tag demo">DEMO</span>`;
 
     return `
     <div class="sensor-item ${state.selectedSensorId === s.id ? 'active' : ''}"
          data-id="${s.id}" onclick="selectSensor(${s.id})">
       <div class="sensor-status-dot ${s.status}"></div>
       <div class="sensor-info">
-        <div class="sensor-code">${s.sensor_code}</div>
+        <div class="sensor-code">${s.sensor_code}${tagHtml}</div>
         <div class="sensor-loc">${s.location}</div>
       </div>
       <div class="sensor-aqi-badge" style="color:${color};background:${color}18;border-color:${color}40">${aqiVal}</div>
@@ -256,7 +260,12 @@ function renderSidebar(sensors) {
   const active = sensors.find(s => s.id === state.selectedSensorId);
   const nodeText = document.getElementById('active-node-text');
   if (nodeText) {
-    nodeText.textContent = active ? `${active.sensor_code} · ${active.location}` : '—';
+    if (active) {
+      const tag = active.data_source === 'live' ? ' [LIVE]' : ' [DEMO]';
+      nodeText.textContent = `${active.sensor_code}${tag} · ${active.location}`;
+    } else {
+      nodeText.textContent = '—';
+    }
   }
 }
 
@@ -305,15 +314,16 @@ window.selectSensor = async function(id) {
 
   // Update context banner to show city name
   if (sensor) {
+    const isLive = sensor.data_source === 'live';
     const ctx = document.getElementById('location-context');
     if (ctx) ctx.style.display = 'flex';
     const ctxText = document.getElementById('location-context-text');
-    if (ctxText) ctxText.textContent = `Showing live data for ${sensor.location}`;
+    if (ctxText) ctxText.textContent = `Showing ${isLive ? 'live WAQI feed' : 'demo data'} for ${sensor.location}`;
     const badge = document.getElementById('source-badge');
     if (badge) {
       badge.style.display = 'inline-flex';
-      badge.className = 'source-badge source-badge-vayu';
-      badge.textContent = 'VAYU Sensor';
+      badge.className = isLive ? 'source-badge source-badge-live' : 'source-badge source-badge-vayu';
+      badge.textContent = isLive ? 'Live WAQI Feed' : 'Simulated Demo Data';
     }
     document.getElementById('vayu-dashboard-section').style.display = '';
     document.getElementById('external-aqi-card').style.display = 'none';
