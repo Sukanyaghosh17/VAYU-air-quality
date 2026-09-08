@@ -2,7 +2,7 @@
 alerts/tests.py — DRF APITestCase suite for alerts and thresholds
 =================================================================
 Key cases verified:
-  - Alert list/retrieve open to any auth user
+  - Alert list/retrieve open to all (AllowAny for public dashboard)
   - Alert PATCH status: admin → 200, regular user → 403
   - Alert PATCH with invalid status value → 400
   - Threshold create: admin → 201, regular user → 403
@@ -16,7 +16,7 @@ from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
 
 from alerts.models import Alert, Threshold
-from sensors.models import Sensor
+from sensors.models import Sensor, SensorReading
 
 User = get_user_model()
 
@@ -180,7 +180,6 @@ class ThresholdAPITests(APITestCase):
 
 from django.test import TestCase, override_settings
 from alerts.services import check_thresholds
-from sensors.models import Sensor, SensorReading
 
 
 def make_threshold(param, warning, critical):

@@ -88,8 +88,9 @@ class SensorReadingViewSet(
     immutable resources.
 
     Permissions:
-      POST / GET: any authenticated user (simulator uses Token auth).
-      PUT / PATCH / DELETE: not routed — 405 from the router.
+      GET (list/retrieve/latest/history): open to all (AllowAny) for public dashboard.
+      POST (create): authenticated users/service accounts (Token auth).
+      PUT / PATCH / DELETE: blocked for all users (403 Forbidden).
 
     Query filters (GET list):
       ?sensor=<id>   — filter by sensor primary key
@@ -317,7 +318,7 @@ class LocationSearchView(APIView):
     Session: stores the searched location in request.session["last_location"]
     on every successful match (internal or external).
 
-    Authentication: same as all sensor endpoints — IsAuthenticated.
+    Authentication: public read-only (AllowAny) to support the anonymous public dashboard search bar.
     """
 
     permission_classes = [AllowAny]

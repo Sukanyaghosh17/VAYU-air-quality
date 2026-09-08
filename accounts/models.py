@@ -8,10 +8,11 @@ We extend AbstractUser (not AbstractBaseUser) because:
     email uniqueness, and the full manager — unnecessary complexity for a
     role-scoped internal tool.
 
-The `role` field is a simple CharField rather than a separate Group/Permission
-setup because VAYU has exactly two roles (admin / user) with a clear capability
-split.  Full Django permissions would be correct for a product with many roles
-or fine-grained object-level rules; here it would be over-engineering.
+The `role` field is a simple CharField rather than a complex Group/Permission
+setup because VAYU has a focused three-role capability split:
+  - Admin: manages system, sensors, thresholds, and alerts.
+  - User: standard dashboard and monitoring access.
+  - Service: automated ingest/simulator accounts with scoped permissions.
 
 AUTH_USER_MODEL = "accounts.User" must be set in settings.py before the first
 migration — Django bakes the user model reference into many system tables.

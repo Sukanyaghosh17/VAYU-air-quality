@@ -2,8 +2,8 @@
 alerts/views.py — AlertViewSet and ThresholdViewSet
 ====================================================
 AlertViewSet permission split:
-  list / retrieve  → any authenticated user (IsAuthenticated default)
-  partial_update   → admin only (get_permissions override)
+  list / retrieve  → open to all (AllowAny for public dashboard)
+  partial_update   → admin only (IsAdminOrReadOnly)
   create / destroy → not routed (alerts are system-generated)
 
   This is implemented via get_permissions() returning different classes
@@ -21,7 +21,7 @@ ThresholdViewSet:
 """
 
 from rest_framework import mixins, viewsets
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny
 
 from sensors.permissions import IsAdminOrReadOnly
 

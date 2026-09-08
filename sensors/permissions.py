@@ -6,7 +6,7 @@ has_object_permission, allow_request) works correctly.
 
 IsAdminOrReadOnly
 -----------------
-  Safe HTTP methods (GET, HEAD, OPTIONS) are open to any authenticated user.
+  Safe HTTP methods (GET, HEAD, OPTIONS) are open to everyone.
   Unsafe methods (POST, PUT, PATCH, DELETE) require user.is_admin() == True.
   Used by: SensorViewSet, ThresholdViewSet, AlertViewSet.partial_update.
 
@@ -77,5 +77,3 @@ class AllowAnyReadRequireAuthCreate(BasePermission):
         if request.method == "POST":
             return bool(request.user and request.user.is_authenticated)
         return False
-
-
