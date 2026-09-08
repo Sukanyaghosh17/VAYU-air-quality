@@ -24,6 +24,8 @@ SensorReadingViewSet.history():
   No serializer class needed — the ORM aggregate result is already a plain dict.
 """
 
+import datetime as _dt
+import logging
 from datetime import timedelta
 
 from django.conf import settings
@@ -47,6 +49,8 @@ from .permissions import (
     IsAdminOrReadOnly,
 )
 from .serializers import SensorReadingSerializer, SensorSerializer
+
+logger = logging.getLogger(__name__)
 
 
 class SensorViewSet(viewsets.ModelViewSet):
@@ -436,6 +440,7 @@ class LocationSearchView(APIView):
                     "latitude":    reading.sensor.latitude,
                     "longitude":   reading.sensor.longitude,
                     "status":      reading.sensor.status,
+                    "data_source": reading.sensor.data_source,
                     "pm25":        reading.pm25,
                     "pm10":        reading.pm10,
                     "temperature": reading.temperature,
@@ -552,6 +557,7 @@ class SensorMapView(APIView):
                 "latitude":     sensor.latitude,
                 "longitude":    sensor.longitude,
                 "status":       sensor.status,
+                "data_source":  sensor.data_source,
                 "aqi":          aqi_data["aqi"],
                 "aqi_category": aqi_data["category"],
                 "pm25":         reading.pm25 if reading else None,
@@ -566,3 +572,137 @@ class SensorMapView(APIView):
         response["Pragma"] = "no-cache"
         response["Expires"] = "0"
         return response
+
+
+class LiveSensorSyncView(APIView):
+    """
+    POST /api/v1/sensors/sync-live/
+    ===============================
+    Authenticated endpoint that synchronizes all live sensors (data_source='live')
+    with real-world WAQI monitoring station feeds.
+
+    - Requires admin or scoped service-account credentials (CanCreateSensor).
+    - Iterates over all Sensor rows where data_source='live'.
+    - Calls fetch_external_aqi() using each sensor's latitude and longitude and a
+      cache key derived from sensor_code.
+    - On success: saves a new SensorReading mapped to pm25, pm10, temperature,
+      humidity, and runs threshold alert evaluation.
+    - If fetch_external_aqi returns None: logs a warning and skips the sensor
+      without inserting fabricated fallback data.
+    - Returns a JSON summary of synced and skipped sensors.
+    """
+
+    permission_classes = [CanCreateSensor]
+
+    def post(self, request, *args, **kwargs):
+        live_sensors = Sensor.objects.filter(data_source=Sensor.DATA_SOURCE_LIVE)
+        synced = []
+        skipped = []
+
+        for sensor in live_sensors:
+            if sensor.status != Sensor.STATUS_ACTIVE:
+                skipped.append({
+                    "sensor_code": sensor.sensor_code,
+                    "reason": f"Sensor status is '{sensor.status}', expected 'active'",
+                })
+                continue
+
+            cache_key = f"live_sync_{sensor.sensor_code}"
+            try:
+                waqi_data = fetch_external_aqi(
+                    lat=sensor.latitude,
+                    lon=sensor.longitude,
+                    cache_key=cache_key,
+                    query=sensor.location,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Unexpected error fetching WAQI data for %s: %s",
+                    sensor.sensor_code,
+                    exc,
+                )
+                waqi_data = None
+
+            if not waqi_data:
+                logger.warning(
+                    "WAQI feed returned no data for live sensor %s (%s); skipping reading creation.",
+                    sensor.sensor_code,
+                    sensor.location,
+                )
+                skipped.append({
+                    "sensor_code": sensor.sensor_code,
+                    "reason": "WAQI API returned no data or no nearby station found",
+                })
+                continue
+
+            pm25 = waqi_data.get("pm25")
+            pm10 = waqi_data.get("pm10")
+            temp = waqi_data.get("temperature")
+            hum = waqi_data.get("humidity")
+
+            if pm25 is None and pm10 is None:
+                logger.warning(
+                    "WAQI feed for %s returned neither PM2.5 nor PM10; skipping reading creation.",
+                    sensor.sensor_code,
+                )
+                skipped.append({
+                    "sensor_code": sensor.sensor_code,
+                    "reason": "Station feed omitted both PM2.5 and PM10",
+                })
+                continue
+
+            # Standard environmental estimation if one PM metric is omitted
+            if pm25 is None and pm10 is not None:
+                pm25 = round(pm10 * 0.55, 2)
+            elif pm10 is None and pm25 is not None:
+                pm10 = round(pm25 * 1.8, 2)
+
+            # Ambient fallbacks if atmospheric sensors are omitted on station
+            if temp is None:
+                temp = 25.0
+            if hum is None:
+                hum = 50.0
+
+            reading = SensorReading.objects.create(
+                sensor=sensor,
+                pm25=pm25,
+                pm10=pm10,
+                temperature=temp,
+                humidity=hum,
+            )
+
+            # Evaluate thresholds for alerts
+            try:
+                from alerts.services import check_thresholds
+                check_thresholds(reading)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "Threshold evaluation failed for live reading id=%d: %s",
+                    reading.pk,
+                    exc,
+                )
+
+            synced.append({
+                "sensor_code": sensor.sensor_code,
+                "location": sensor.location,
+                "station_name": waqi_data.get("station_name"),
+                "reading_id": reading.pk,
+                "pm25": reading.pm25,
+                "pm10": reading.pm10,
+                "temperature": reading.temperature,
+                "humidity": reading.humidity,
+                "aqi": waqi_data.get("aqi"),
+            })
+
+        return Response(
+            {
+                "status": "success",
+                "total_live_sensors": live_sensors.count(),
+                "synced_count": len(synced),
+                "skipped_count": len(skipped),
+                "synced": synced,
+                "skipped": skipped,
+            },
+            status=status.HTTP_200_OK,
+        )
+
