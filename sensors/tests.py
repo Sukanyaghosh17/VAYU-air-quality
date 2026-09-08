@@ -1110,6 +1110,10 @@ class DRFThrottlingTests(APITestCase):
         self.url = "/api/v1/readings/"
         self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.token}")
 
+    def tearDown(self):
+        from django.core.cache import cache
+        cache.clear()
+
     def test_throttle_classes_and_rates_configured(self):
         classes = settings.REST_FRAMEWORK.get("DEFAULT_THROTTLE_CLASSES", [])
         self.assertTrue(any("IngestScopedRateThrottle" in c or "ScopedRateThrottle" in c for c in classes))
@@ -1138,6 +1142,22 @@ class DRFThrottlingTests(APITestCase):
             self.assertEqual(r2.status_code, status.HTTP_201_CREATED)
             r3 = self.client.post(self.url, payload, format="json")
             self.assertEqual(r3.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+    def test_get_readings_not_throttled_by_ingest_scope(self):
+        """GET /readings/ must not be limited by the readings_ingest (POST) throttle."""
+        from unittest.mock import patch
+        from django.core.cache import cache
+        from sensors.throttling import IngestScopedRateThrottle
+
+        cache.clear()
+        make_reading(self.sensor)
+        with patch.dict(IngestScopedRateThrottle.THROTTLE_RATES, {"readings_ingest": "1/min"}):
+            r1 = self.client.get(self.url)
+            self.assertEqual(r1.status_code, status.HTTP_200_OK)
+            r2 = self.client.get(self.url)
+            self.assertEqual(r2.status_code, status.HTTP_200_OK)
+            r3 = self.client.get(self.url)
+            self.assertEqual(r3.status_code, status.HTTP_200_OK)
 
 
 # ── bootstrap_demo management command tests ───────────────────────────────────

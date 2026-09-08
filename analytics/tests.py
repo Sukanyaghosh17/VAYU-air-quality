@@ -188,9 +188,8 @@ class TrendViewTests(APITestCase):
 import tempfile
 from pathlib import Path
 from django.test import TestCase, override_settings
-from sensors.models import Sensor, SensorReading
 from analytics.ml import (
-    train_sensor_model, score_reading, get_model_path, _build_row, FEATURES
+    clear_model_cache, train_sensor_model, score_reading, get_model_path, _build_row, FEATURES
 )
 
 
@@ -250,6 +249,12 @@ class MLTrainAndScoreTests(TestCase):
     def setUp(self):
         self.sensor = _make_ml_sensor()
         self.tmp = tempfile.mkdtemp()
+
+    def tearDown(self):
+        import shutil
+        from analytics.ml import clear_model_cache
+        clear_model_cache()
+        shutil.rmtree(self.tmp, ignore_errors=True)
 
     @override_settings()
     def test_train_creates_model_file(self):
@@ -323,6 +328,12 @@ class MLManagementCommandTests(TestCase):
         self.sensor = _make_ml_sensor("SEN-CMD01")
         self.tmp = tempfile.mkdtemp()
 
+    def tearDown(self):
+        import shutil
+        from analytics.ml import clear_model_cache
+        clear_model_cache()
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
     @override_settings()
     def test_train_ml_dry_run(self):
         """--dry-run should not create any model files."""
@@ -383,6 +394,15 @@ class MLModelCachingTests(TestCase):
     def setUp(self):
         self.sensor = _make_ml_sensor("SEN-CACHE01")
         self.tmp = tempfile.mkdtemp()
+        self.extra_tmps = []
+
+    def tearDown(self):
+        import shutil
+        from analytics.ml import clear_model_cache
+        clear_model_cache()
+        shutil.rmtree(self.tmp, ignore_errors=True)
+        for p in self.extra_tmps:
+            shutil.rmtree(p, ignore_errors=True)
 
     @override_settings()
     def test_model_loaded_from_cache_on_subsequent_calls(self):
@@ -400,7 +420,6 @@ class MLModelCachingTests(TestCase):
 
         # Clear cache to simulate a fresh process state with model on disk
         clear_model_cache()
-        from analytics.ml import get_model_path
         self.assertNotIn(str(get_model_path(self.sensor.id)), _MODEL_CACHE)
 
         reading = _make_ml_reading(self.sensor, pm25=15.0)
@@ -427,13 +446,13 @@ class MLModelCachingTests(TestCase):
         same sensor_id in a new directory must not collide with or serve stale
         cached models from the old directory.
         """
-        from analytics.ml import clear_model_cache, get_model_path, score_reading, train_sensor_model
         from django.conf import settings
 
         clear_model_cache()
 
         tmp_a = tempfile.mkdtemp()
         tmp_b = tempfile.mkdtemp()
+        self.extra_tmps.extend([tmp_a, tmp_b])
 
         # Step 1: Train model A under tmp_a with normal readings (pm25 ~ 15.0)
         settings.ML_MODELS_DIR = tmp_a
@@ -466,4 +485,3 @@ class MLModelCachingTests(TestCase):
             score_b,
             "score_reading should reflect the model from tmp_b, not the stale cached model from tmp_a",
         )
-

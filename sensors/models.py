@@ -59,7 +59,6 @@ class Sensor(models.Model):
         help_text="Decimal longitude of the sensor installation point.",
     )
 
-
     class Meta:
         ordering = ["sensor_code"]
 

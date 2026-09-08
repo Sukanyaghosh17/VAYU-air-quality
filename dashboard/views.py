@@ -19,4 +19,3 @@ class HomeView(TemplateView):
         # the search bar and immediately re-run the search on page load.
         ctx["last_location"] = self.request.session.get("last_location", "")
         return ctx
-

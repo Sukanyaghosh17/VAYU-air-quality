@@ -150,7 +150,6 @@ def _parse_waqi_feed(
     }
 
 
-
 def fetch_external_aqi(
     lat: Optional[float],
     lon: Optional[float],

@@ -1,3 +1,7 @@
+import os
+
+os.environ.setdefault("SECRET_KEY", "vayu-test-secret-key-for-isolated-runs")
+
 from vayu.settings import *  # noqa: F401, F403
 
 DATABASES = {
@@ -9,7 +13,7 @@ DATABASES = {
 
 # Remove WhiteNoise from middleware in tests — staticfiles/ doesn't exist
 # until collectstatic runs, which causes a noisy UserWarning during the suite.
-MIDDLEWARE = [m for m in MIDDLEWARE if m != "whitenoise.middleware.WhiteNoiseMiddleware"]
+MIDDLEWARE = [m for m in MIDDLEWARE if m != "whitenoise.middleware.WhiteNoiseMiddleware"]  # noqa: F405
 
 # Use the default static files storage (no manifest hashing needed in tests)
 STORAGES = {

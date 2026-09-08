@@ -102,11 +102,12 @@ TEMPLATES = [
 WSGI_APPLICATION = "vayu.wsgi.application"
 
 # ── Database ─────────────────────────────────────────────────────────────────
-# MySQL is the primary target. mysqlclient is the recommended driver (C extension,
-# faster than PyMySQL). If the DB doesn't exist yet, create it first:
-#   CREATE DATABASE vayu_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+# Defaults to SQLite for seamless local development.
+# For production or MySQL development, set DATABASE_URL in .env:
+#   MySQL:      DATABASE_URL=mysql://root:@127.0.0.1:3306/vayu_db
+#   PostgreSQL: DATABASE_URL=postgres://user:pass@host:5432/dbname
 DATABASES = {
-    "default": env.db("DATABASE_URL", default="mysql://root:@127.0.0.1:3306/vayu_db")
+    "default": env.db("DATABASE_URL", default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}")
 }
 
 # ── Custom user model ────────────────────────────────────────────────────────

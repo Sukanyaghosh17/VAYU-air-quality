@@ -26,4 +26,3 @@ class DashboardPublicViewTests(TestCase):
         """Logout endpoint has been permanently removed (returns 404)."""
         response = self.client.get("/logout/")
         self.assertEqual(response.status_code, 404)
-
