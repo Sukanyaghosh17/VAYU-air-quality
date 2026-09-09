@@ -587,8 +587,9 @@ class LiveSensorSyncView(APIView):
       cache key derived from sensor_code.
     - On success: saves a new SensorReading mapped to pm25, pm10, temperature,
       humidity, and runs threshold alert evaluation.
-    - If fetch_external_aqi returns None: logs a warning and skips the sensor
-      without inserting fabricated fallback data.
+    - If fetch_external_aqi returns None or omits any metric (pm25, pm10,
+      temperature, humidity): logs a warning and skips the sensor without
+      inserting fabricated fallback data.
     - Returns a JSON summary of synced and skipped sensors.
     """
 
@@ -640,28 +641,27 @@ class LiveSensorSyncView(APIView):
             temp = waqi_data.get("temperature")
             hum = waqi_data.get("humidity")
 
-            if pm25 is None and pm10 is None:
+            missing_metrics = [
+                name for name, val in [
+                    ("pm25", pm25),
+                    ("pm10", pm10),
+                    ("temperature", temp),
+                    ("humidity", hum),
+                ] if val is None
+            ]
+
+            if missing_metrics:
+                missing_str = ", ".join(missing_metrics)
                 logger.warning(
-                    "WAQI feed for %s returned neither PM2.5 nor PM10; skipping reading creation.",
+                    "WAQI feed for %s missing metric(s): %s; skipping reading creation.",
                     sensor.sensor_code,
+                    missing_str,
                 )
                 skipped.append({
                     "sensor_code": sensor.sensor_code,
-                    "reason": "Station feed omitted both PM2.5 and PM10",
+                    "reason": f"Station feed missing required metric(s): {missing_str}",
                 })
                 continue
-
-            # Standard environmental estimation if one PM metric is omitted
-            if pm25 is None and pm10 is not None:
-                pm25 = round(pm10 * 0.55, 2)
-            elif pm10 is None and pm25 is not None:
-                pm10 = round(pm25 * 1.8, 2)
-
-            # Ambient fallbacks if atmospheric sensors are omitted on station
-            if temp is None:
-                temp = 25.0
-            if hum is None:
-                hum = 50.0
 
             reading = SensorReading.objects.create(
                 sensor=sensor,

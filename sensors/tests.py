@@ -1181,7 +1181,7 @@ class BootstrapDemoCommandTests(TestCase):
         sensors = Sensor.objects.filter(sensor_code__startswith="SIM-")
         self.assertEqual(sensors.count(), 5)
         for s in sensors:
-            self.assertEqual(s.data_source, Sensor.DATA_SOURCE_SIMULATED)
+            self.assertEqual(s.data_source, Sensor.DATA_SOURCE_LIVE)
 
         live_sensor = Sensor.objects.get(sensor_code="LIVE-DEL")
         self.assertEqual(live_sensor.data_source, Sensor.DATA_SOURCE_LIVE)
@@ -1343,4 +1343,77 @@ class LiveSensorSyncAPITests(APITestCase):
         self.assertEqual(resp.data["skipped_count"], 1)
         self.assertIn("maintenance", resp.data["skipped"][0]["reason"])
         mock_fetch.assert_not_called()
+
+    @patch("sensors.views.fetch_external_aqi")
+    def test_sync_live_partial_waqi_response_skips_and_does_not_fabricate(self, mock_fetch):
+        """When WAQI omits any metric, skip reading creation; do not fabricate numbers."""
+        # Case 1: Missing temperature
+        mock_fetch.return_value = {
+            "source": "external_waqi",
+            "station_name": "Test Station",
+            "aqi": 100,
+            "category": "Moderate",
+            "pm25": 35.0,
+            "pm10": 70.0,
+            "temperature": None,
+            "humidity": 50.0,
+        }
+        self.auth(self.service_token)
+        resp = self.client.post(self.sync_url)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["synced_count"], 0)
+        self.assertEqual(resp.data["skipped_count"], 1)
+        self.assertEqual(resp.data["skipped"][0]["sensor_code"], "LIVE-DEL")
+        self.assertIn("missing", resp.data["skipped"][0]["reason"])
+        self.assertIn("temperature", resp.data["skipped"][0]["reason"])
+        self.assertEqual(SensorReading.objects.filter(sensor=self.live_sensor).count(), 0)
+
+        # Case 2: Missing PM2.5 (should not fabricate pm10 * 0.55)
+        mock_fetch.return_value = {
+            "source": "external_waqi",
+            "station_name": "Test Station",
+            "aqi": 100,
+            "category": "Moderate",
+            "pm25": None,
+            "pm10": 70.0,
+            "temperature": 25.0,
+            "humidity": 50.0,
+        }
+        resp = self.client.post(self.sync_url)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["synced_count"], 0)
+        self.assertEqual(resp.data["skipped_count"], 1)
+        self.assertIn("missing", resp.data["skipped"][0]["reason"])
+        self.assertIn("pm25", resp.data["skipped"][0]["reason"])
+        self.assertEqual(SensorReading.objects.filter(sensor=self.live_sensor).count(), 0)
+
+    @patch("sensors.views.fetch_external_aqi")
+    def test_sync_live_processes_all_sensors_after_bootstrap_demo(self, mock_fetch):
+        """Confirm LiveSensorSyncView queries all sensors with data_source='live' after bootstrap_demo."""
+        call_command("bootstrap_demo")
+        live_sensors = Sensor.objects.filter(data_source=Sensor.DATA_SOURCE_LIVE)
+        # 5 SIM-* sensors + LIVE-DEL = 6 total
+        self.assertEqual(live_sensors.count(), 6)
+
+        mock_fetch.return_value = {
+            "source": "external_waqi",
+            "station_name": "Test Station",
+            "aqi": 75,
+            "category": "Satisfactory",
+            "pm25": 25.0,
+            "pm10": 50.0,
+            "temperature": 27.0,
+            "humidity": 60.0,
+        }
+        self.auth(self.service_token)
+        resp = self.client.post(self.sync_url)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data["synced_count"], 6)
+        self.assertEqual(resp.data["skipped_count"], 0)
+        self.assertEqual(mock_fetch.call_count, 6)
+
+        synced_codes = {item["sensor_code"] for item in resp.data["synced"]}
+        expected_codes = set(live_sensors.values_list("sensor_code", flat=True))
+        self.assertEqual(synced_codes, expected_codes)
+
 
