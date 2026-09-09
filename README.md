@@ -116,7 +116,7 @@ Open your browser and navigate to:
 
 ## 🌐 Real-Time Live WAQI Monitoring Feeds
 
-All dashboard sensors (`SIM-001` through `SIM-005` and `LIVE-DEL`) reflect periodically-synced real, live data from the World Air Quality Index (WAQI) monitoring network, synchronized every 20 minutes via the scheduled `.github/workflows/sync_live_aqi.yml` workflow.
+All dashboard sensors (`SIM-001` through `SIM-005`) reflect periodically-synced real, live data from the World Air Quality Index (WAQI) monitoring network, synchronized every 20 minutes via the scheduled `.github/workflows/sync_live_aqi.yml` workflow.
 
 > [!IMPORTANT]
 > **Dashboard "—" Dash Placeholder Requires GitHub Secret Configuration**:
@@ -136,7 +136,7 @@ All dashboard sensors (`SIM-001` through `SIM-005` and `LIVE-DEL`) reflect perio
 The platform includes a multi-featured simulator (`simulate_sensors.py`) to stream realistic air-quality telemetry directly into the ingest API.
 
 ### Step 1: Provision Simulator Service Account & API Token
-Run the idempotent `bootstrap_demo` command to initialize the dedicated `simulator` service account (scoped with `role='service'` and `can_provision_sensors`), pre-create 5 demo sensors, provision the live sensor (`LIVE-DEL`), and output its authentication token:
+Run the idempotent `bootstrap_demo` command to initialize the dedicated `simulator` service account (scoped with `role='service'` and `can_provision_sensors`), pre-create 5 demo sensors, and output its authentication token:
 
 ```bash
 # Initialize demo sensors, live sensor, service account, and 48 hours of demo readings:
@@ -150,7 +150,6 @@ Output:
 ```text
 SIMULATOR_TOKEN=c2d595b1c8c4963cbf5f83e835f24152617545f3
 [bootstrap_demo] Sensors: 5 created, 0 existing preserved.
-[bootstrap_demo] Live sensor LIVE-DEL (New Delhi (Live — via WAQI)): created.
 ```
 
 Copy the output token and paste it into `.env` as `SIMULATOR_TOKEN=<token>`.
@@ -184,7 +183,7 @@ python simulate_sensors.py --sensors 3 --duration 60
 On Render's Free tier, Background Workers and Cron Jobs are not supported (only web services and Key Value offer free compute plans). Because of this, scheduled GitHub Actions workflows periodically feed and synchronize telemetry into the deployed application at zero cost:
 
 1. **Automatic Provisioning via `build.sh`**:
-   Whenever the application deploys on Render, `build.sh` automatically runs `python manage.py bootstrap_demo --force-reseed` right after `migrate`. It ensures the `simulator` service account, DRF auth token, 5 demo sensors, the live `LIVE-DEL` sensor, and 48 hours of realistic diurnal baseline readings exist in PostgreSQL without duplicates.
+   Whenever the application deploys on Render, `build.sh` automatically runs `python manage.py bootstrap_demo --force-reseed` right after `migrate`. It ensures the `simulator` service account, DRF auth token, 5 demo sensors, and 48 hours of realistic diurnal baseline readings exist in PostgreSQL without duplicates.
 2. **Configure GitHub Actions Secrets**:
    - Check the Render deploy logs (or run `python manage.py bootstrap_demo` locally connected to `DATABASE_URL`, or in Render's SSH shell) to view the printed `SIMULATOR_TOKEN=<key>`.
    - In your GitHub repository, navigate to **Settings → Secrets and variables → Actions**.

@@ -215,44 +215,14 @@ class Command(BaseCommand):
             )
         )
 
-        # 3b. Provision live WAQI sensor (LIVE-DEL) — distinct from synthetic SIM-002
-        live_code = "LIVE-DEL"
-        live_loc = "New Delhi (Live — via WAQI)"
-        live_lat = 28.6315
-        live_lon = 77.2167
-        live_sensor, l_created = Sensor.objects.get_or_create(
-            sensor_code=live_code,
-            defaults={
-                "location": live_loc,
-                "latitude": live_lat,
-                "longitude": live_lon,
-                "status": Sensor.STATUS_ACTIVE,
-                "data_source": Sensor.DATA_SOURCE_LIVE,
-                "installed_at": today,
-            },
-        )
-        l_update_fields = []
-        if live_sensor.latitude != live_lat:
-            live_sensor.latitude = live_lat
-            l_update_fields.append("latitude")
-        if live_sensor.longitude != live_lon:
-            live_sensor.longitude = live_lon
-            l_update_fields.append("longitude")
-        if live_sensor.location != live_loc:
-            live_sensor.location = live_loc
-            l_update_fields.append("location")
-        if live_sensor.data_source != Sensor.DATA_SOURCE_LIVE:
-            live_sensor.data_source = Sensor.DATA_SOURCE_LIVE
-            l_update_fields.append("data_source")
-        if l_update_fields:
-            live_sensor.save(update_fields=l_update_fields)
-
-        l_msg = "created" if l_created else "preserved/updated"
-        self.stdout.write(
-            self.style.SUCCESS(
-                f"[bootstrap_demo] Live sensor {live_code} ({live_loc}): {l_msg}."
+        # 3b. Clean up legacy LIVE-DEL sensor if it still exists in the DB
+        deleted_live_del, _ = Sensor.objects.filter(sensor_code="LIVE-DEL").delete()
+        if deleted_live_del:
+            self.stdout.write(
+                self.style.WARNING(
+                    "[bootstrap_demo] Removed legacy LIVE-DEL sensor from the database."
+                )
             )
-        )
 
         # 4. Seed demo readings
         force = options.get("force_reseed", False)
