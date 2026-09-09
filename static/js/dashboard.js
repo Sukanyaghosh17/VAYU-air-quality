@@ -239,13 +239,14 @@ function renderSidebar(sensors) {
 
     const aqiVal = aqi != null ? aqi : '—';
     const color = cat ? aqiColor(cat) : '#94a3b8';
+    const tagHtml = `<span class="source-tag live">LIVE</span>`;
 
     return `
     <div class="sensor-item ${state.selectedSensorId === s.id ? 'active' : ''}"
          data-id="${s.id}" onclick="selectSensor(${s.id})">
       <div class="sensor-status-dot ${s.status}"></div>
       <div class="sensor-info">
-        <div class="sensor-code">${s.sensor_code}</div>
+        <div class="sensor-code">${s.sensor_code}${tagHtml}</div>
         <div class="sensor-loc">${s.location}</div>
       </div>
       <div class="sensor-aqi-badge" style="color:${color};background:${color}18;border-color:${color}40">${aqiVal}</div>
@@ -257,7 +258,7 @@ function renderSidebar(sensors) {
   const nodeText = document.getElementById('active-node-text');
   if (nodeText) {
     if (active) {
-      nodeText.textContent = `${active.sensor_code} · ${active.location}`;
+      nodeText.textContent = `${active.sensor_code} [LIVE] · ${active.location}`;
     } else {
       nodeText.textContent = '—';
     }
