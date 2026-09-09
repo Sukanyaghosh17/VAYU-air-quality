@@ -15,9 +15,14 @@ jobs:
     steps:
       - name: Trigger Live Sensor Sync
         env:
-          # Prefer dedicated LIVE_SYNC_TOKEN, falling back to SIMULATOR_TOKEN if not explicitly configured
-          SYNC_TOKEN: ${{ secrets.LIVE_SYNC_TOKEN || secrets.SIMULATOR_TOKEN }}
+          # Pass both secrets separately; GitHub Actions does not support || in secrets context.
+          # The fallback logic is handled in the shell script below.
+          LIVE_SYNC_TOKEN: ${{ secrets.LIVE_SYNC_TOKEN }}
+          SIMULATOR_TOKEN: ${{ secrets.SIMULATOR_TOKEN }}
         run: |
+          # Prefer LIVE_SYNC_TOKEN; fall back to SIMULATOR_TOKEN
+          SYNC_TOKEN="${LIVE_SYNC_TOKEN:-$SIMULATOR_TOKEN}"
+
           if [ -z "$SYNC_TOKEN" ]; then
             echo "::error::Neither LIVE_SYNC_TOKEN nor SIMULATOR_TOKEN secret is configured in GitHub repository secrets."
             exit 1
