@@ -369,13 +369,12 @@ function renderSensorList(sensors) {
   list.innerHTML = sensors.map(s => {
     const color = mapAqiColor(s.aqi_category);
     const aqi   = s.aqi ?? '—';
-    const tagHtml = `<span class="source-tag live">LIVE</span>`;
     return `
       <div class="map-sensor-row" data-sensor-id="${s.id}"
            onclick="mapSidebarSelectSensor(${s.id})">
         <span class="map-sensor-dot map-sensor-dot--${s.status}"></span>
         <div class="map-sensor-info">
-          <div class="map-sensor-code">${s.sensor_code}${tagHtml}</div>
+          <div class="map-sensor-code">${s.sensor_code}</div>
           <div class="map-sensor-loc">${s.location}</div>
         </div>
         <span class="map-sensor-aqi-pill"
@@ -404,8 +403,7 @@ function showMapInfoPanel(s) {
   document.getElementById('map-info-detail').style.display = '';
 
   const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-  const tag = ' [LIVE]';
-  set('mi-code', `${s.sensor_code}${tag}`);
+  set('mi-code', s.sensor_code);
   set('mi-loc',  s.location);
   set('mi-aqi',  s.aqi ?? '—');
   set('mi-cat',  s.aqi_category ?? 'N/A');
