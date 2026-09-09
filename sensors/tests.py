@@ -1183,12 +1183,8 @@ class BootstrapDemoCommandTests(TestCase):
         for s in sensors:
             self.assertEqual(s.data_source, Sensor.DATA_SOURCE_LIVE)
 
-        live_sensor = Sensor.objects.get(sensor_code="LIVE-DEL")
-        self.assertEqual(live_sensor.data_source, Sensor.DATA_SOURCE_LIVE)
-        self.assertEqual(live_sensor.location, "New Delhi (Live — via WAQI)")
-        self.assertEqual(live_sensor.latitude, 28.6315)
-        self.assertEqual(live_sensor.longitude, 77.2167)
-        self.assertEqual(live_sensor.readings.count(), 0)
+        # LIVE-DEL was a legacy sensor that bootstrap_demo now removes on deploy.
+        self.assertEqual(Sensor.objects.filter(sensor_code="LIVE-DEL").count(), 0)
 
     def test_bootstrap_demo_is_idempotent(self):
         out1 = StringIO()
@@ -1199,7 +1195,8 @@ class BootstrapDemoCommandTests(TestCase):
         User = get_user_model()
         self.assertEqual(User.objects.filter(username="simulator").count(), 1)
         self.assertEqual(Sensor.objects.filter(sensor_code__startswith="SIM-").count(), 5)
-        self.assertEqual(Sensor.objects.filter(sensor_code="LIVE-DEL").count(), 1)
+        # LIVE-DEL is deleted by bootstrap_demo — running it twice must not recreate it.
+        self.assertEqual(Sensor.objects.filter(sensor_code="LIVE-DEL").count(), 0)
 
     def test_bootstrap_demo_updates_legacy_user_role(self):
         User = get_user_model()
@@ -1392,8 +1389,13 @@ class LiveSensorSyncAPITests(APITestCase):
         """Confirm LiveSensorSyncView queries all sensors with data_source='live' after bootstrap_demo."""
         call_command("bootstrap_demo")
         live_sensors = Sensor.objects.filter(data_source=Sensor.DATA_SOURCE_LIVE)
-        # 5 SIM-* sensors + LIVE-DEL = 6 total
-        self.assertEqual(live_sensors.count(), 6)
+        # bootstrap_demo provisions 5 SIM-* sensors (all live) and removes legacy LIVE-DEL.
+        # The setUp() of this class creates one LIVE-DEL sensor, so the total is:
+        #   5 SIM-* (from bootstrap_demo) + 1 LIVE-DEL (from setUp, NOT deleted because
+        #   bootstrap_demo only deletes if sensor_code="LIVE-DEL" exists with no readings
+        #   and was created before this test's setUp already inserted it).
+        # Actually: setUp creates LIVE-DEL, bootstrap_demo deletes it, so only SIM-* remain.
+        self.assertEqual(live_sensors.count(), 5)
 
         mock_fetch.return_value = {
             "source": "external_waqi",
@@ -1408,9 +1410,9 @@ class LiveSensorSyncAPITests(APITestCase):
         self.auth(self.service_token)
         resp = self.client.post(self.sync_url)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(resp.data["synced_count"], 6)
+        self.assertEqual(resp.data["synced_count"], 5)
         self.assertEqual(resp.data["skipped_count"], 0)
-        self.assertEqual(mock_fetch.call_count, 6)
+        self.assertEqual(mock_fetch.call_count, 5)
 
         synced_codes = {item["sensor_code"] for item in resp.data["synced"]}
         expected_codes = set(live_sensors.values_list("sensor_code", flat=True))
