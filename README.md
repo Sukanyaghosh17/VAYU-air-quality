@@ -114,20 +114,20 @@ Open your browser and navigate to:
 
 ---
 
-## 🌐 Live Feeds vs. Simulated Demo Data
+## 🌐 Real-Time Live WAQI Monitoring Feeds
 
-To provide a complete demonstration out-of-the-box while also supporting real-world telemetry, VAYU clearly distinguishes between two categories of sensors:
+All dashboard sensors (`SIM-001` through `SIM-005` and `LIVE-DEL`) reflect periodically-synced real, live data from the World Air Quality Index (WAQI) monitoring network, synchronized every 20 minutes via the scheduled `.github/workflows/sync_live_aqi.yml` workflow.
 
-| Label | Data Source | Behavior & Refresh |
-|---|---|---|
-| **DEMO** | Synthetic Simulation | Sensors `SIM-001` through `SIM-005` generate realistic Gaussian telemetry via `simulate_sensors.py` and initial seed data. Designed to test alerting, threshold violations, and ML anomaly detection without consuming third-party API quotas. |
-| **LIVE** | World Air Quality Index (WAQI) | Sensor `LIVE-DEL` ("New Delhi (Live — via WAQI)") ingests official telemetry from nearby government and public monitoring stations via the WAQI API. Synced every 20 minutes via GitHub Actions. |
+> [!IMPORTANT]
+> **Dashboard "—" Dash Placeholder Requires GitHub Secret Configuration**:
+> If a sensor on the live dashboard shows "—" (dash) instead of an AQI number, it simply means no successful WAQI sync has landed for it yet. The scheduled live sync workflow (`POST /api/v1/sensors/sync-live/`) requires the **`SIMULATOR_TOKEN`** (or `LIVE_SYNC_TOKEN`) secret to be configured in your GitHub repository secrets (**Settings → Secrets and variables → Actions**). Code changes alone cannot populate the dashboard without this secret — this dash will persist indefinitely until the token from your Render deployment is added to GitHub secrets.
 
 > [!NOTE]
 > **Comparing Live Readings with external portals (e.g. aqi.in)**:
-> Even live sensors may show slight variations when compared directly against sites like [aqi.in](https://www.aqi.in). This is **expected and not a bug**:
+> Live sensors may show slight variations when compared directly against sites like [aqi.in](https://www.aqi.in). This is **expected and not a bug**:
 > 1. **Station Proximity**: The WAQI API selects the nearest reporting monitoring station with active sensors relative to the specified coordinates (e.g., US Embassy vs. Anand Vihar in Delhi).
 > 2. **Refresh Cycles**: Monitoring stations publish data on varying hourly schedules, and VAYU applies a 15-minute cache TTL (`CACHE_TTL`) to avoid excessive quota consumption.
+
 
 ---
 
@@ -195,8 +195,8 @@ On Render's Free tier, Background Workers and Cron Jobs are not supported (only 
    > **Without this step, scheduled automation will fail** — the GitHub Actions workflows require `SIMULATOR_TOKEN` (or `LIVE_SYNC_TOKEN`) to authenticate against the ingest and sync endpoints.
 
 3. **Scheduled Workflows**:
-   - **Telemetry Simulator** (`.github/workflows/simulate.yml`): Runs every 10 minutes (`*/10 * * * *`) for 4-minute bursts, keeping the free Render web service warm and generating demo sensor activity.
-   - **Live WAQI Sync** (`.github/workflows/sync_live_aqi.yml`): Runs every 20 minutes (`*/20 * * * *`) to fetch fresh official station telemetry for live sensors. The 20-minute interval respects the WAQI 15-minute cache TTL (`CACHE_TTL = 60 * 15`), ensuring fresh data without wasted API calls.
+   - **Live WAQI Sync** (`.github/workflows/sync_live_aqi.yml`): Runs every 20 minutes (`*/20 * * * *`) to fetch fresh official station telemetry for all live sensors across India. The 20-minute interval respects the WAQI 15-minute cache TTL (`CACHE_TTL = 60 * 15`), ensuring fresh data without wasted API calls.
+   - **Telemetry Simulator** (`.github/workflows/simulate.yml`): Configured for manual execution (`workflow_dispatch`) to generate synthetic telemetry on-demand for offline testing, without writing synthetic data into live production sensor feeds.
 
 ---
 

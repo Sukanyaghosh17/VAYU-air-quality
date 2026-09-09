@@ -239,10 +239,7 @@ function renderSidebar(sensors) {
 
     const aqiVal = aqi != null ? aqi : '—';
     const color = cat ? aqiColor(cat) : '#94a3b8';
-    const isLive = s.data_source === 'live';
-    const tagHtml = isLive
-      ? `<span class="source-tag live">LIVE</span>`
-      : `<span class="source-tag demo">DEMO</span>`;
+    const tagHtml = `<span class="source-tag live">LIVE</span>`;
 
     return `
     <div class="sensor-item ${state.selectedSensorId === s.id ? 'active' : ''}"
@@ -261,8 +258,7 @@ function renderSidebar(sensors) {
   const nodeText = document.getElementById('active-node-text');
   if (nodeText) {
     if (active) {
-      const tag = active.data_source === 'live' ? ' [LIVE]' : ' [DEMO]';
-      nodeText.textContent = `${active.sensor_code}${tag} · ${active.location}`;
+      nodeText.textContent = `${active.sensor_code} [LIVE] · ${active.location}`;
     } else {
       nodeText.textContent = '—';
     }
@@ -314,16 +310,15 @@ window.selectSensor = async function(id) {
 
   // Update context banner to show city name
   if (sensor) {
-    const isLive = sensor.data_source === 'live';
     const ctx = document.getElementById('location-context');
     if (ctx) ctx.style.display = 'flex';
     const ctxText = document.getElementById('location-context-text');
-    if (ctxText) ctxText.textContent = `Showing ${isLive ? 'live WAQI feed' : 'demo data'} for ${sensor.location}`;
+    if (ctxText) ctxText.textContent = `Showing live WAQI feed for ${sensor.location}`;
     const badge = document.getElementById('source-badge');
     if (badge) {
       badge.style.display = 'inline-flex';
-      badge.className = isLive ? 'source-badge source-badge-live' : 'source-badge source-badge-vayu';
-      badge.textContent = isLive ? 'Live WAQI Feed' : 'Simulated Demo Data';
+      badge.className = 'source-badge source-badge-live';
+      badge.textContent = 'Live WAQI Feed';
     }
     document.getElementById('vayu-dashboard-section').style.display = '';
     document.getElementById('external-aqi-card').style.display = 'none';

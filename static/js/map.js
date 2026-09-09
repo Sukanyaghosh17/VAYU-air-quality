@@ -113,9 +113,8 @@ function sensorPopupHtml(s) {
   const hum   = s.humidity   != null ? parseFloat(s.humidity).toFixed(1)   : '—';
   const ts    = s.timestamp  ? new Date(s.timestamp).toLocaleString()   : '—';
   const dot   = `<span class="map-status-dot map-status-dot--${s.status}"></span>`;
-  const isLive = s.data_source === 'live';
-  const badgeClass = isLive ? 'map-popup-badge--live' : 'map-popup-badge--vayu';
-  const badgeText = isLive ? 'Live WAQI Feed' : 'Simulated Demo';
+  const badgeClass = 'map-popup-badge--live';
+  const badgeText = 'Live WAQI Feed';
 
   return `
     <div class="vayu-map-popup">
@@ -370,10 +369,7 @@ function renderSensorList(sensors) {
   list.innerHTML = sensors.map(s => {
     const color = mapAqiColor(s.aqi_category);
     const aqi   = s.aqi ?? '—';
-    const isLive = s.data_source === 'live';
-    const tagHtml = isLive
-      ? `<span class="source-tag live">LIVE</span>`
-      : `<span class="source-tag demo">DEMO</span>`;
+    const tagHtml = `<span class="source-tag live">LIVE</span>`;
     return `
       <div class="map-sensor-row" data-sensor-id="${s.id}"
            onclick="mapSidebarSelectSensor(${s.id})">
@@ -408,7 +404,7 @@ function showMapInfoPanel(s) {
   document.getElementById('map-info-detail').style.display = '';
 
   const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-  const tag = s.data_source === 'live' ? ' [LIVE]' : ' [DEMO]';
+  const tag = ' [LIVE]';
   set('mi-code', `${s.sensor_code}${tag}`);
   set('mi-loc',  s.location);
   set('mi-aqi',  s.aqi ?? '—');
