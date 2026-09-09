@@ -6,11 +6,11 @@ Idempotent bootstrap command for initial environment and demo provisioning.
 Provisions:
   1. The 'simulator' service account (role='service') with scoped sensor-creation permissions.
   2. A DRF auth Token for the simulator user (printed as SIMULATOR_TOKEN=<key>).
-  3. Pre-creates 5 demo sensors directly via the ORM using preset Indian city coordinates
-     so the dashboard displays sensors immediately upon deployment.
-  4. Seeds 48 hours of realistic demo readings (one per hour per sensor) so that the
-     fleet view and trend charts are populated on first deploy without needing the
-     external simulator to run first.
+  3. Pre-creates 5 sensors (SIM-001..005) with data_source='live' using preset Indian city
+     coordinates so the dashboard displays live sensors immediately upon deployment.
+  4. Seeds 48 hours of initial readings (one per hour per sensor) so that the
+     fleet view and trend charts are populated on first deploy without waiting
+     for the scheduled live sync workflow to cycle.
 
 Idempotency:
   Safe to run repeatedly during deployment (e.g. in build.sh). Existing records
@@ -182,7 +182,7 @@ class Command(BaseCommand):
                     "latitude": lat,
                     "longitude": lon,
                     "status": Sensor.STATUS_ACTIVE,
-                    "data_source": Sensor.DATA_SOURCE_SIMULATED,
+                    "data_source": Sensor.DATA_SOURCE_LIVE,
                     "installed_at": today,
                 },
             )
@@ -196,8 +196,8 @@ class Command(BaseCommand):
             if sensor.location != loc:
                 sensor.location = loc
                 update_fields.append("location")
-            if sensor.data_source != Sensor.DATA_SOURCE_SIMULATED:
-                sensor.data_source = Sensor.DATA_SOURCE_SIMULATED
+            if sensor.data_source != Sensor.DATA_SOURCE_LIVE:
+                sensor.data_source = Sensor.DATA_SOURCE_LIVE
                 update_fields.append("data_source")
             if update_fields:
                 sensor.save(update_fields=update_fields)

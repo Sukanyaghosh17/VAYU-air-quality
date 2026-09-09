@@ -23,12 +23,23 @@ jobs:
             exit 1
           fi
 
+          echo "Waking up Render web service at https://vayu-app.onrender.com..."
+          for i in {1..12}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "https://vayu-app.onrender.com/" || true)
+            if [ "$STATUS" = "200" ] || [ "$STATUS" = "301" ] || [ "$STATUS" = "302" ]; then
+              echo "Render server is online (HTTP $STATUS)"
+              break
+            fi
+            echo "Waiting for server to boot (attempt $i/12, status: $STATUS)..."
+            sleep 5
+          done
+
           echo "Triggering live sensor sync on https://vayu-app.onrender.com/api/v1/sensors/sync-live/..."
           HTTP_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
             -X POST "https://vayu-app.onrender.com/api/v1/sensors/sync-live/" \
             -H "Authorization: Token ${SYNC_TOKEN}" \
             -H "Content-Type: application/json" \
-            --max-time 30)
+            --max-time 60)
 
           BODY=$(echo "$HTTP_RESPONSE" | sed -e '$d')
           STATUS=$(echo "$HTTP_RESPONSE" | tail -n 1 | cut -d: -f2)
@@ -40,3 +51,4 @@ jobs:
             echo "::error::Live sync endpoint failed with HTTP $STATUS"
             exit 1
           fi
+

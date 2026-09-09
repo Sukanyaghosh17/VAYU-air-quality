@@ -1,10 +1,12 @@
 name: Scheduled Sensor Telemetry Simulation
 
 on:
-  schedule:
-    # Run every 10 minutes to stay within free-tier limits and keep Render warm
-    - cron: "*/10 * * * *"
+  # Scheduled cron disabled: all sensors are now live and synced via WAQI (sync_live_aqi.yml)
+  # Kept on workflow_dispatch for manual on-demand simulation testing if needed.
+  # schedule:
+  #   - cron: "*/10 * * * *"
   workflow_dispatch:
+
 
 jobs:
   simulate:

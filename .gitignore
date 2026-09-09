@@ -19,6 +19,8 @@ media/
 
 # Environment
 .env
+.venv/
+venv/
 
 # ML model artifacts
 ml_models/*.joblib
