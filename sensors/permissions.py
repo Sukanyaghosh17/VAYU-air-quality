@@ -21,6 +21,24 @@ AllowAnyReadRequireAuthCreate
 from rest_framework.permissions import BasePermission
 
 
+class AllowPublicSync(BasePermission):
+    """
+    Allows POST requests from anyone (no authentication required).
+
+    Used exclusively by LiveSensorSyncView (POST /api/v1/sensors/sync-live/).
+    This endpoint is safe to expose publicly because it:
+      - Only reads data from WAQI's public API using pre-configured sensor coords.
+      - Writes SensorReading rows (append-only, no destructive ops).
+      - Cannot modify, delete, or expose any sensitive user or admin data.
+
+    This removes the need for a GitHub Actions secret / service-account token
+    while keeping all other admin/write endpoints fully protected.
+    """
+
+    def has_permission(self, request, view):
+        return True
+
+
 class CanCreateSensor(BasePermission):
     """
     Allows sensor creation (POST) to admin users and authorized service accounts.

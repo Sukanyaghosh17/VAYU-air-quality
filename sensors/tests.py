@@ -1228,14 +1228,20 @@ class LiveSensorSyncAPITests(APITestCase):
     def auth(self, token):
         self.client.credentials(HTTP_AUTHORIZATION=f"Token {token}")
 
-    def test_sync_live_unauthenticated_returns_401(self):
+    @patch("sensors.views.fetch_external_aqi")
+    def test_sync_live_unauthenticated_is_allowed(self, mock_fetch):
+        """sync-live is now a public endpoint — no auth required."""
+        mock_fetch.return_value = None
         resp = self.client.post(self.sync_url)
-        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
-    def test_sync_live_regular_user_forbidden_returns_403(self):
+    @patch("sensors.views.fetch_external_aqi")
+    def test_sync_live_regular_user_also_allowed(self, mock_fetch):
+        """Regular users can POST — endpoint is intentionally public."""
+        mock_fetch.return_value = None
         self.auth(self.user_token)
         resp = self.client.post(self.sync_url)
-        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
     @patch("sensors.views.fetch_external_aqi")
     def test_sync_live_service_user_allowed(self, mock_fetch):

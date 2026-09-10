@@ -45,6 +45,7 @@ from .geocoding import geocode
 from .models import Sensor, SensorReading
 from .permissions import (
     AllowAnyReadRequireAuthCreate,
+    AllowPublicSync,
     CanCreateSensor,
     IsAdminOrReadOnly,
 )
@@ -578,10 +579,13 @@ class LiveSensorSyncView(APIView):
     """
     POST /api/v1/sensors/sync-live/
     ===============================
-    Authenticated endpoint that synchronizes all live sensors (data_source='live')
+    Public endpoint that synchronizes all live sensors (data_source='live')
     with real-world WAQI monitoring station feeds.
 
-    - Requires admin or scoped service-account credentials (CanCreateSensor).
+    - No authentication required (AllowPublicSync) so the GitHub Actions
+      scheduled workflow can call it without storing secrets in the repo.
+    - This is safe: the endpoint only appends SensorReading rows and cannot
+      modify, delete, or expose any sensitive user or admin data.
     - Iterates over all Sensor rows where data_source='live'.
     - Calls fetch_external_aqi() using each sensor's latitude and longitude and a
       cache key derived from sensor_code.
@@ -593,7 +597,7 @@ class LiveSensorSyncView(APIView):
     - Returns a JSON summary of synced and skipped sensors.
     """
 
-    permission_classes = [CanCreateSensor]
+    permission_classes = [AllowPublicSync]
 
     def post(self, request, *args, **kwargs):
         live_sensors = Sensor.objects.filter(data_source=Sensor.DATA_SOURCE_LIVE)

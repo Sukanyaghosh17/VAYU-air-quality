@@ -13,21 +13,8 @@ jobs:
     name: Sync Live WAQI Feed
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger Live Sensor Sync
-        env:
-          # Pass both secrets separately; GitHub Actions does not support || in secrets context.
-          # The fallback logic is handled in the shell script below.
-          LIVE_SYNC_TOKEN: ${{ secrets.LIVE_SYNC_TOKEN }}
-          SIMULATOR_TOKEN: ${{ secrets.SIMULATOR_TOKEN }}
+      - name: Wake Render service and trigger live sensor sync
         run: |
-          # Prefer LIVE_SYNC_TOKEN; fall back to SIMULATOR_TOKEN
-          SYNC_TOKEN="${LIVE_SYNC_TOKEN:-$SIMULATOR_TOKEN}"
-
-          if [ -z "$SYNC_TOKEN" ]; then
-            echo "::error::Neither LIVE_SYNC_TOKEN nor SIMULATOR_TOKEN secret is configured in GitHub repository secrets."
-            exit 1
-          fi
-
           echo "Waking up Render web service at https://vayu-app.onrender.com..."
           for i in {1..12}; do
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "https://vayu-app.onrender.com/" || true)
@@ -42,7 +29,6 @@ jobs:
           echo "Triggering live sensor sync on https://vayu-app.onrender.com/api/v1/sensors/sync-live/..."
           HTTP_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
             -X POST "https://vayu-app.onrender.com/api/v1/sensors/sync-live/" \
-            -H "Authorization: Token ${SYNC_TOKEN}" \
             -H "Content-Type: application/json" \
             --max-time 60)
 
@@ -56,4 +42,3 @@ jobs:
             echo "::error::Live sync endpoint failed with HTTP $STATUS"
             exit 1
           fi
-
